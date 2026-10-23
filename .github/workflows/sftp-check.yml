@@ -34,6 +34,7 @@ jobs:
           # Secrets pasted from a web page can carry stray spaces or line breaks: strip them
           trim() { printf '%s' "$1" | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'; }
           SFTP_HOST=$(trim "$SFTP_HOST"); SFTP_USER=$(trim "$SFTP_USER"); SFTP_PORT=$(trim "$SFTP_PORT"); SFTP_ROOT_PATH=$(trim "$SFTP_ROOT_PATH")
+          SSHPASS=$(printf '%s' "$SSHPASS" | tr -d '\r\n'); export SSHPASS
           case "$SFTP_USER" in *[!A-Za-z0-9._-]*) echo "::error::SFTP_USER still has unusual characters after trimming (length ${#SFTP_USER})";; esac
           sudo apt-get install -y -qq sshpass >/dev/null
           printf 'pwd\ncd %s\npwd\nls -1\n' "$SFTP_ROOT_PATH" > batch

@@ -3,7 +3,8 @@
   "private": true,
   "description": "Toads 31: Toad in the Hole scorer",
   "scripts": {
-    "test": "node --test tests/*.test.js tests/*.test.mjs"
+    "test": "node --test tests/*.test.js tests/*.test.mjs",
+    "sync-rules": "cp app/js/rules.js backend/src/lib/rules.cjs"
   },
   "devDependencies": {
     "@aws-sdk/client-dynamodb": "^3.1156.0",

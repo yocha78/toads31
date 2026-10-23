@@ -13,20 +13,22 @@ function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 function load(){try{const v=JSON.parse(localStorage.getItem(KEY));if(v&&Array.isArray(v.players))S=Object.assign(S,v)}catch(e){}}
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
 
-const isTour=()=>S.mode==="tournament"&&!!S.tour;
+// The tournament on screen: a live one this phone follows (S.live, online only), or the local one (S.tour)
+const TOUR=()=>S.live&&S.live.tour?S.live.tour:S.tour;
+const isTour=()=>!!(S.live&&S.live.tour)||(S.mode==="tournament"&&!!S.tour);
 // ri -1 = qualifying round, 0.. = knockout rounds
-const matchAt=(ri,mi)=>ri<0?(S.tour.quali||{matches:[]}).matches[mi]||null:(S.tour.rounds[ri]||[])[mi]||null;
+const matchAt=(ri,mi)=>ri<0?(TOUR().quali||{matches:[]}).matches[mi]||null:(TOUR().rounds[ri]||[])[mi]||null;
 const M=()=>isTour()&&S.focus?matchAt(S.focus.ri,S.focus.mi):null;
 const G=()=>isTour()?(M()||{}).game||null:S.g;
 
-/* ---------- tournament (the current one, S.tour) ---------- */
+/* ---------- tournament (the current one, TOUR()) ---------- */
 const knockSize=Toads.knockSize;
-const standings=()=>Toads.standings(S.tour);
-const qualiDone=()=>Toads.qualiDone(S.tour);
-const settle=()=>Toads.settle(S.tour);
-const all=()=>Toads.allMatches(S.tour);
-const assignTables=()=>Toads.assignTables(S.tour);
-const roundName=ri=>Toads.roundName(S.tour,ri);
+const standings=()=>Toads.standings(TOUR());
+const qualiDone=()=>Toads.qualiDone(TOUR());
+const settle=()=>Toads.settle(TOUR());
+const all=()=>Toads.allMatches(TOUR());
+const assignTables=()=>Toads.assignTables(TOUR());
+const roundName=ri=>Toads.roundName(TOUR(),ri);
 // Team wins are kept apart from player wins, in case a team shares a player's name
 const winKey=(g,name)=>g&&g.members?"team:"+name:name;
 function matchWins(name){
@@ -39,6 +41,7 @@ function matchWins(name){
 function render(){
   for(const id of["setup","orderView","bracketView","game","win","playersView","statsView"])$(id).hidden=true;
   const views={setup:["setup",renderSetup],players:["playersView",renderPlayers],stats:["statsView",renderStats],order:["orderView",renderOrder],bracket:["bracketView",renderHub],game:["game",renderGame],win:["win",renderWin]};
+  if(S.live&&["game","win","order"].includes(S.stage)&&(!M()||!scoring()&&(S.stage!=="game"||!G()||G().done))){S.focus=null;S.ord=null;S.stage="bracket"}
   const v=views[S.stage];
   if(!v){S.stage="setup";return render()}
   $(v[0]).hidden=false;v[1]();
@@ -71,7 +74,22 @@ function renderSetup(){
   $("shuffleBtn").hidden=!(T&&n>2);
   $("statsBtn").hidden=!NET.on;
   if(NET.on)renderOnline();
+  if(NET.on)renderLiveSetup();
   setupStart();
+}
+// Tournament mode, online: tournaments to follow, and (organiser) the option to run this one live
+function renderLiveSetup(){
+  const T=S.mode==="tournament", org=!!ToadsApi.organiser(), list=NET.liveList||[];
+  $("liveBox").hidden=!T&&!list.length&&!NET.liveMsg;
+  $("liveList").innerHTML=list.map(t=>`<li><span class="pname">${esc(t.name)}${t.venue?` <span class="hint">· ${esc(t.venue)}</span>`:""}</span><button class="x" data-follow="${esc(t.id)}">Follow</button></li>`).join("");
+  $("liveListHead").hidden=!list.length;
+  $("liveCreate").hidden=!T||!org;
+  $("liveOn").checked=!!S.liveOn;
+  $("liveFields").hidden=!S.liveOn;
+  $("liveHint").textContent=!T?"":!org?"To run a live tournament that everyone follows and scores from their own phones, log in as organiser on the Players & stats screen."
+    :S.liveOn?"Each table is scored from a phone at the table, after entering the PIN. Share the PIN only with the scorers.":"";
+  $("liveHint").hidden=!$("liveHint").textContent;
+  $("liveMsg").textContent=NET.liveMsg||"";
 }
 function tourHint(n){
   const base="Knockout, one against one. First to win 2 games takes the match, and winners meet in the next round.";
@@ -87,10 +105,11 @@ function tourHint(n){
 function setupStart(){
   const T=S.mode==="tournament", D=S.mode==="duo", n=S.players.length;
   $("startBtn").disabled=T?n<2:D?!!teamProblem():n===0;
-  $("startBtn").textContent=T?"Start tournament":D?"Start duo game":n===1?"Start solo game":"Start game";
+  $("startBtn").textContent=T?(liveCreating()?"Start live tournament":"Start tournament"):D?"Start duo game":n===1?"Start solo game":"Start game";
   if(D)$("teamHint").textContent=teamProblem()||"Ready. The partner chosen as 1st throws on the team's first turn.";
 }
 
+const liveCreating=()=>NET.on&&S.mode==="tournament"&&!!S.liveOn&&!!ToadsApi.organiser();
 /* ---------- online: shared players and venues, only when config.js gives an API ---------- */
 // Without an API none of this shows and the app works exactly as before.
 const NET={on:ToadsApi.enabled,players:ToadsApi.cached("players"),venues:ToadsApi.cached("venues"),fresh:false,saving:{},note:""};
@@ -188,6 +207,8 @@ function renderStats(){
       ${b?`<p><b>Best game:</b> ${fmtAvg(b.avg)} per toad, ${b.won?"won":"lost"}${where(b)} on ${fmtDate(b.finished)}${b.sides>1?` (${b.sides} ${b.mode==="duo"?"teams":"players"})`:" (solo)"}.</p>`:""}
       <h2>By month</h2><table class="st"><tr><th>Month</th><th class="n">Played</th><th class="n">Won</th><th class="n">Avg</th></tr>
       ${d.months.slice().reverse().map(m=>`<tr><td>${fmtMonth(m.month)}</td><td class="n">${m.played}</td><td class="n">${m.won}</td><td class="n">${fmtAvg(m.avg)}</td></tr>`).join("")}</table>
+      ${(d.tournaments||[]).length?`<h2>Tournaments</h2><table class="st"><tr><th>Tournament</th><th class="n">Games</th><th class="n">Won</th></tr>
+      ${d.tournaments.map(t=>`<tr><td>${esc(t.name)} <span class="hint">${fmtDate(t.last)}</span></td><td class="n">${t.played}</td><td class="n">${t.won}</td></tr>`).join("")}</table>`:""}
       ${d.headToHead.length?`<h2>Head to head</h2><table class="st"><tr><th>Against</th><th class="n">Played</th><th class="n">Won</th><th class="n">Lost</th></tr>
       ${d.headToHead.map(o=>`<tr><td>${esc(o.name)}${o.playerId?"":' <span class="tag">guest</span>'}</td><td class="n">${o.played}</td><td class="n">${o.won}</td><td class="n">${o.lost}</td></tr>`).join("")}</table>`:""}
       <h2>Latest games</h2><table class="st"><tr><th>Date</th><th>Pub</th><th>Result</th><th class="n">Avg</th></tr>
@@ -239,6 +260,188 @@ function shareVenue(){
     delete NET.saving["venue:"+v];
     if(r.item){NET.venues=NET.venues.filter(x=>x.id!==r.item.id).concat([r.item]);if(r.item.name!==S.venue&&nameKey(r.item.name)===nameKey(S.venue)){S.venue=r.item.name;save()}if(S.stage==="setup")render()}
   });
+}
+
+/* ---------- live tournaments (online only) ---------- */
+// The organiser creates one; anyone follows it with its link (#t-<code>) and the phone that claims a table
+// with the PIN scores it. Changes are applied here straight away with the same rules as the server
+// (Toads.applyOp), queued, and sent in order, so scoring carries on with no signal.
+// S.live = {id, name, venue, status, ver, tour, claims, mine:{table:{token,tag}}, pin, queue:[{n, op}], seen}
+const LIVE_POLL=4000;
+const liveOn=()=>!!(NET.on&&S.live&&S.live.tour);
+const myTable=k=>!!(S.live&&S.live.mine[k]);
+const scoring=()=>{const m=M();return !S.live||(m&&myTable(m.table))};
+const liveHash=()=>{const h=/^#t-([A-Z0-9]{6})$/i.exec(location.hash);return h?h[1].toUpperCase():null};
+function setHash(id){try{history.replaceState(null,"",location.pathname+location.search+(id?"#t-"+id:""))}catch(e){}}
+const ago=ms=>{const s=Math.round(ms/1000);return s<60?`${s} s ago`:s<3600?`${Math.round(s/60)} min ago`:`${Math.round(s/3600)} h ago`};
+function liveTake(t){
+  const L=S.live;
+  Object.assign(L,{name:t.name,venue:t.venue,status:t.status,ver:t.ver,tour:t.tour,claims:t.claims||{},seen:Date.now()});
+  // A phone that lost its table (taken over, released by the organiser) stops scoring it
+  for(const k of Object.keys(L.mine))if(!L.claims[k]||L.claims[k].tag!==L.mine[k].tag){
+    delete L.mine[k];L.queue=L.queue.filter(x=>x.n!=+k);
+    NET.liveNote=`Table ${+k+1} is now scored on another phone.`;
+  }
+}
+async function follow(id){
+  NET.liveMsg="Opening the tournament…";render();
+  const r=await ToadsApi.tour("GET","/"+id);
+  if(r.status===200&&r.data&&r.data.tournament){
+    S.live={id,mine:{},queue:[],pin:null};liveTake(r.data.tournament);NET.liveMsg="";NET.liveNote="";
+    setHash(id);goHub();window.scrollTo(0,0);return;
+  }
+  NET.liveMsg=r.offline?"No signal, so the tournament can't be opened. Try again in a moment.":r.status===404?"That tournament doesn't exist (or was deleted).":`Can't open the tournament: ${(r.data&&r.data.error)||r.status}.`;
+  if(liveHash()===id)setHash(null);
+  render();
+}
+function leaveLive(){S.live=null;NET.liveNote="";NET.pinFor=null;setHash(null);S.focus=null;S.ord=null;S.last=null;S.stage="setup";render()}
+async function loadLiveList(){
+  const r=await ToadsApi.tour("GET","");
+  NET.liveList=r.status===200&&r.data?r.data.tournaments:null;
+  if(S.stage==="setup")render();
+}
+async function createLive(){
+  const name=$("liveName").value.replace(/\s+/g," ").trim(), pin=$("livePin").value.trim();
+  if(!name||!/^\d{4,8}$/.test(pin)){NET.liveMsg=!name?"Give the tournament a name.":"The scoring PIN must be 4 to 8 digits.";render();return}
+  NET.liveMsg="Creating the tournament…";render();
+  const r=await ToadsApi.tour("POST","",{name,venue:S.venue||null,players:S.players.slice(),tables:S.tables,format:S.tourFormat,pin},"required");
+  if(r.status===201&&r.data){
+    S.live={id:r.data.tournament.id,mine:{},queue:[],pin};liveTake(r.data.tournament);
+    NET.liveMsg="";NET.liveNote="Share the link or QR code so others can follow. Tap a table to score it.";NET.shareOpen=true;
+    S.liveOn=false;$("liveName").value="";$("livePin").value="";
+    setHash(S.live.id);goHub();window.scrollTo(0,0);return;
+  }
+  NET.liveMsg=r.offline?"No signal, so the live tournament can't be created. Untick “Run it live” to play it on this phone only.":r.expired?"Your organiser login has run out. Log in again on the Players & stats screen.":`Can't create it: ${(r.data&&r.data.error)||r.status}.`;
+  render();
+}
+// Apply a change to this phone's copy, then queue it for the server. → the applyOp result
+function livePlay(op){
+  const m=M(), r=Toads.applyOp(S.live.tour,m.table,op);
+  if(r.ok&&!r.dup){S.live.queue.push({n:m.table,op});save();liveFlush()}
+  return r;
+}
+let flushingLive=false;
+async function liveFlush(){
+  if(!liveOn()||flushingLive)return;
+  flushingLive=true;let reload=false;
+  try{
+    while(S.live&&S.live.queue.length){
+      const L=S.live,{n,op}=L.queue[0],c=L.mine[n];
+      if(!c){L.queue.shift();continue}
+      const r=await ToadsApi.tour("POST",`/${L.id}/tables/${n}/play`,{token:c.token,op});
+      if(r.offline||r.status>=500){L.offline=true;break}
+      L.offline=false;
+      if(r.status===200){L.queue.shift();save();continue}
+      // Refused: another phone changed the table, the claim went, or the tournament ended. Show what the server has.
+      L.queue=L.queue.filter(x=>x.n!==n);
+      if(r.status===403){delete L.mine[n];NET.liveNote=`Table ${n+1} is now scored on another phone.`}
+      else NET.liveNote=`Table ${n+1} had moved on, so this phone now shows the latest scores.`;
+      if(M()&&M().table===n&&["game","win","order"].includes(S.stage)){S.focus=null;S.ord=null;S.last=null;S.stage="bracket"}
+      reload=true;
+    }
+  }finally{flushingLive=false}
+  save();
+  if(reload)await liveFetch(true);else if(S.live&&!S.live.queue.length)await liveFetch(false);
+  else liveStatus();
+}
+// Fetch the tournament (only when it changed, unless full). Skipped while this phone has changes to send.
+async function liveFetch(full){
+  if(!liveOn())return;
+  if(S.live.queue.length){liveStatus();return}
+  const L=S.live, r=await ToadsApi.tour("GET",`/${L.id}`+(full?"":`?since=${L.ver}`));
+  if(S.live!==L||L.queue.length)return;
+  if(r.offline){L.offline=true;liveStatus();return}
+  L.offline=false;
+  if(r.status===404){NET.liveMsg="That tournament was deleted.";leaveLive();return}
+  if(r.status!==200||!r.data){liveStatus();return}
+  if(r.data.same){L.seen=Date.now();liveStatus();return}
+  liveTake(r.data.tournament);save();
+  // Redraw unless this phone is in the middle of scoring a game (its copy is already up to date)
+  const m=M();
+  if(S.stage==="bracket"||(S.stage==="game"&&!scoring()))render();
+  else if(S.stage==="order"&&(!m||!myTable(m.table)))goHub();
+  else liveStatus();
+}
+function liveStatus(){
+  const L=S.live;if(!L||!$("liveInfo"))return;
+  const q=L.queue.length;
+  $("liveInfo").textContent=(L.venue?L.venue+" · ":"")+(L.status==="ended"?"Ended":L.tour.champion?"Finished":"Live")+` · code ${L.id}`;
+  $("liveSync").textContent=q?(L.offline?`Offline: ${q} change${q===1?"":"s"} waiting to send.`:"Sending…")
+    :L.offline?`Offline: showing the scores from ${ago(Date.now()-(L.seen||0))}.`:L.seen?`Updated ${ago(Date.now()-L.seen)}.`:"";
+  $("liveSync").className="hint"+(L.offline?" bad":"");
+}
+async function claimTable(k,takeover){
+  const L=S.live;
+  if(!L.pin){NET.pinFor={k,takeover};render();$("pinInput").focus();return}
+  NET.liveNote=`Claiming table ${k+1}…`;render();
+  const r=await ToadsApi.tour("POST",`/${L.id}/tables/${k}/claim`,{pin:L.pin,takeover:!!takeover});
+  if(S.live!==L)return;
+  if(r.status===200&&r.data){
+    L.mine[k]={token:r.data.token,tag:r.data.tag};NET.pinFor=null;
+    NET.liveNote=`This phone now scores table ${k+1}.`;await liveFetch(true);render();return;
+  }
+  if(r.status===403){L.pin=null;NET.pinFor={k,takeover};NET.liveNote="Wrong PIN.";}
+  else if(r.status===409&&r.data&&r.data.claimed){NET.liveNote=`Another phone is already scoring table ${k+1}. Tap “Take over” if it has stopped.`;await liveFetch(true)}
+  else NET.liveNote=r.offline?"No signal. Try again in a moment.":`Can't claim the table: ${(r.data&&r.data.error)||r.status}.`;
+  render();
+}
+async function releaseTable(k){
+  const L=S.live, c=L.mine[k];
+  if(c&&L.queue.some(x=>x.n===k)){NET.liveNote=`Wait until table ${k+1}'s scores are sent before giving it up.`;render();return}
+  const r=await ToadsApi.tour("POST",`/${L.id}/tables/${k}/release`,{token:c&&c.token},!c);
+  if(S.live!==L)return;
+  if(r.status===200){delete L.mine[k];NET.liveNote=`Table ${k+1} is free for another phone to score.`;await liveFetch(true)}
+  else NET.liveNote=r.offline?"No signal. Try again in a moment.":`Can't release the table: ${(r.data&&r.data.error)||r.status}.`;
+  render();
+}
+async function endLive(){
+  const L=S.live, r=await ToadsApi.tour("POST",`/${L.id}/end`,{},"required");
+  NET.liveNote=r.status===200?"The tournament has ended. Everyone can still see the results.":r.offline?"No signal. Try again in a moment.":r.expired?"Your organiser login has run out. Log in again on the Players & stats screen.":`Can't end it: ${(r.data&&r.data.error)||r.status}.`;
+  if(r.status===200)await liveFetch(true);
+  render();
+}
+// QR code for the link, drawn by js/vendor/qrcode.js, loaded the first time it is needed
+function drawQr(url){
+  const box=$("liveQr");
+  if(box.dataset.url===url)return;
+  if(!window.qrcode){
+    if(!document.getElementById("qrLib")){const sc=document.createElement("script");sc.id="qrLib";sc.src=document.querySelector('meta[name="toads-qr"]').content;sc.onload=()=>drawQr(url);document.head.appendChild(sc)}
+    return;
+  }
+  const q=qrcode(0,"M");q.addData(url);q.make();
+  box.innerHTML=q.createSvgTag({cellSize:5,margin:3,scalable:true,alt:"QR code for "+url});box.dataset.url=url;
+}
+function renderLivePanel(){
+  const L=S.live, on=!!L&&liveOn();
+  $("livePanel").hidden=!on;
+  if(!on)return;
+  $("liveTitle").textContent=L.name;
+  const org=!!ToadsApi.organiser(), url=location.origin+location.pathname+"#t-"+L.id;
+  $("liveNote").textContent=NET.liveNote||"";
+  $("liveNote").className="msg"+(/^(Wrong|Can't|No signal|Another|Table \d+ (is now|had))/.test(NET.liveNote||"")?" bad":"");
+  $("shareBox").hidden=!NET.shareOpen;
+  $("liveShareBtn").setAttribute("aria-expanded",!!NET.shareOpen);
+  if(NET.shareOpen){$("liveLink").value=url;drawQr(url)}
+  const p=NET.pinFor;
+  $("pinForm").hidden=!p;
+  if(p)$("pinLabel").textContent=`Enter the scoring PIN to ${p.takeover?"take over":"score"} table ${p.k+1}.`;
+  $("liveEnd").hidden=!(org&&L.status!=="ended");
+  liveStatus();
+}
+// Live extras on a table card: who is scoring it, and the buttons that go with that
+function liveCard(k,x){
+  const L=S.live, mine=myTable(k), other=!mine&&!!L.claims[k], ended=L.status==="ended", g=x&&x.m.game&&!x.m.game.done?x.m.game:null;
+  let main="", extra="";
+  if(mine){
+    if(x)main=`<button class="${g?"":"primary"}" data-ri="${x.ri}" data-mi="${x.mi}">${g?"Continue":`Start game ${gameNo(x.m)}`}</button>`;
+    extra=`<span>Scored on this phone</span><button type="button" class="link" data-release="${k}">Give up table</button>`;
+  }else{
+    if(x&&g)main=`<button data-ri="${x.ri}" data-mi="${x.mi}">Watch</button>`;
+    else if(!other&&!ended)main=`<button class="primary" data-claim="${k}">Score this table</button>`;
+    if(other)extra=`<span>Scored on another phone</span>${ended?"":`<button type="button" class="link" data-takeover="${k}">Take over</button>`}${ToadsApi.organiser()?`<button type="button" class="link" data-release="${k}">Release</button>`:""}`;
+    else if(x&&g&&!ended)extra=`<span>Nobody is scoring it</span><button type="button" class="link" data-claim="${k}">Score this table</button>`;
+  }
+  return {main,extra:extra?`<div class="tclaim">${extra}</div>`:""};
 }
 
 /* ---------- duo teams ---------- */
@@ -295,18 +498,22 @@ function renderOrder(){
 
 function renderHub(){
   settle();assignTables();
-  const t=S.tour;
+  const t=TOUR();
   $("endTourConfirm").hidden=true;
+  renderLivePanel();
+  $("endTourBtn").parentElement.hidden=!!S.live;
   $("champPanel").hidden=!t.champion;
   $("tablesPanel").hidden=!!t.champion;
   if(t.champion){$("champToad").innerHTML=TOAD;$("champName").textContent=t.champion}
+  $("champNew").hidden=!!S.live;$("champChange").textContent=S.live?"Leave":"Change players";
   const list=all();
   let cards="";
   for(let k=0;k<t.tables;k++){
     const x=list.find(({m})=>m.table===k&&!m.winner);
+    const lc=S.live?liveCard(k,x):null;
     if(!x){
       const more=list.some(({m})=>!m.winner&&!m.bye);
-      cards+=`<div class="tcard free"><div class="tn"><span>Table ${k+1}</span><span class="pill idle">Free</span></div><div class="ti">${more?"Waiting for earlier matches to finish.":"No more matches."}</div></div>`;
+      cards+=`<div class="tcard free"><div class="tn"><span>Table ${k+1}</span><span class="pill idle">Free</span></div><div class="ti">${more?"Waiting for earlier matches to finish.":"No more matches."}</div>${lc&&more?lc.main+lc.extra:lc&&myTable(k)?lc.extra:""}</div>`;
       continue;
     }
     const {m,ri,mi}=x, g=m.game&&!m.game.done?m.game:null;
@@ -314,7 +521,7 @@ function renderHub(){
       <div class="tw">${esc(m.a)} v ${esc(m.b)}</div>
       <div class="ti">${roundName(ri)} · Game ${gameNo(m)}${gameNo(m)>1?` · ${m.wa}–${m.wb}`:""}</div>
       ${g?`<div class="live">${g.gp.map((p,i)=>`${esc(p)} ${g.rem[i]}`).join(" · ")} left</div>`:""}
-      <button class="${g?"":"primary"}" data-ri="${ri}" data-mi="${mi}">${g?"Continue":`Start game ${gameNo(m)}`}</button></div>`;
+      ${lc?lc.main+lc.extra:`<button class="${g?"":"primary"}" data-ri="${ri}" data-mi="${mi}">${g?"Continue":`Start game ${gameNo(m)}`}</button>`}</div>`;
   }
   $("tableCards").innerHTML=cards;
   // Collapsible: when closed, a one-line summary stands in for the cards
@@ -344,7 +551,7 @@ function renderHub(){
 
 // Qualifying standings on the chalkboard; the top K are above the dashed cut line
 function qualiHTML(){
-  const q=S.tour.quali, st=standings(), done=qualiDone();
+  const q=TOUR().quali, st=standings(), done=qualiDone();
   const played=q.matches.filter(m=>m.winner).length;
   const rows=st.map((r,i)=>`<tr class="${i<q.K?"in":""}${i===q.K-1?" cut":""}"><td>${i+1}</td><td class="nm">${esc(r.name)}</td><td>${r.pl}</td><td>${r.w}</td><td>${r.gw-r.gl>0?"+":""}${r.gw-r.gl}</td><td>${r.toads?r.avg.toFixed(2):"–"}</td></tr>`).join("");
   const open=!S.qualiCollapsed;
@@ -356,7 +563,7 @@ function qualiHTML(){
 }
 
 function bracketHTML(){
-  const t=S.tour;
+  const t=TOUR();
   let h=t.rounds.map((r,ri)=>`<div class="bround"><h3>${roundName(ri)}</h3><div class="bmatches">`+r.map(m=>{
     const live=m.table!=null&&!m.winner;
     const line=(name,w,isB)=>{
@@ -382,6 +589,10 @@ function renderGame(){
   $("pad").innerHTML=Toads.keypad(c,r).map(({n,bust})=>`<button data-s="${n}" class="${bust?"over":""}" aria-label="Score ${n}${bust?' (bust)':''}">${n}</button>`).join("");
   closeFinish();
   $("undoBtn").disabled=g.hist.length===0;
+  // Watching a live table scored on another phone: the board only
+  const watch=!scoring();
+  $("pad").hidden=watch;$("undoBtn").hidden=watch;
+  if(watch){$("msg").textContent=S.live.status==="ended"?"The tournament has ended.":"Watching: the scores come from the phone at the table.";$("msg").className="msg"}
   $("board").innerHTML=columns(false);
 }
 
@@ -409,13 +620,14 @@ function renderWin(){
     return;
   }
   const hi=Math.max(m.wa,m.wb), lo=Math.min(m.wa,m.wb);
-  if(S.tour.champion){
+  if(TOUR().champion){
     $("winLabel").textContent="Tournament champion";
     $("winInfo").textContent=`Won the final ${hi}–${lo}.`;
     A.textContent="See the bracket";A.onclick=goHub;
     B.textContent="New tournament";B.onclick=startTournament;
+    if(S.live)B.hidden=true;
   }else if(m.winner&&S.focus.ri<0){
-    const q=S.tour.quali, left=q.matches.filter(x=>!x.winner).length;
+    const q=TOUR().quali, left=q.matches.filter(x=>!x.winner).length;
     $("winLabel").textContent="Qualifying match won";
     $("winInfo").textContent=`Beats ${L.name===m.a?m.b:m.a} ${hi}–${lo}. `+(left?`${left} qualifying match${left===1?"":"es"} still to play. Table ${m.table+1} is free.`:`Qualifying is complete: the top ${q.K} go into the knockout.`);
     A.textContent="Back to tables";A.onclick=goHub;
@@ -501,6 +713,11 @@ function pick(name){
   render();
 }
 function beginGame(order){
+  if(S.live){
+    const m=M(), r=livePlay({t:"start",ri:S.focus.ri,mi:S.focus.mi,gameId:newId(),order:order.slice(),at:Date.now()});
+    if(!r.ok){NET.liveNote=`Can't start the game: ${r.error}.`;goHub();return}
+    S.ord=null;S.last=null;S.stage="game";$("msg").textContent="";$("quitConfirm").hidden=true;render();return;
+  }
   const g=newG(order);
   if(S.mode==="duo"&&!isTour())g.members=Object.fromEntries(S.teams.map(t=>[t.name.trim(),[t.a,t.b]]));
   // Online, Single and Duo games are saved: they get an id, a start time and the venue
@@ -512,6 +729,7 @@ function beginGame(order){
 function openMatch(ri,mi){
   S.focus={ri,mi};const m=M();
   if(m.game&&!m.game.done){S.stage="game";$("msg").textContent="";render()}
+  else if(S.live&&(!myTable(m.table)||S.live.status==="ended"))goHub();
   else askOrder([m.a,m.b]);
 }
 
@@ -527,6 +745,7 @@ function askFinish(s,choices){
 function closeFinish(){$("pad").hidden=false;$("finishAsk").hidden=true}
 
 function score(s,used){
+  if(S.live)return scoreLive(s,used);
   const g=G(), t=Toads.playTurn(g,s,used);
   if(t.ask){askFinish(s,t.ask);return}
   if(g.id)g.hist[g.hist.length-1].at=Date.now();
@@ -535,6 +754,20 @@ function score(s,used){
   if(t.won){finishGame(g.gp[t.p]);return}
   if(t.bust){msg.textContent=team?`Bust! ${who} goes over, ${team} stays on ${before}.`:`Bust! ${who} stays on ${before}.`;msg.className="msg bad"}
   else{msg.textContent=(s?`${who} scores ${s}`:`${who} scores nothing`)+(team?` for ${team}.`:".");msg.className="msg good"}
+  render();
+}
+
+// A live table: the same messages, but the change goes through Toads.applyOp and the queue
+function scoreLive(s,used){
+  const g=G(), last=g.hist.length, r=livePlay({t:"turn",ri:S.focus.ri,mi:S.focus.mi,gameId:g.id,expect:last,id:newId(),s,used,at:Date.now()});
+  if(r.ask){askFinish(s,r.ask);return}
+  closeFinish();
+  const msg=$("msg");
+  if(!r.ok){msg.textContent=`That score wasn't taken: ${r.error}.`;msg.className="msg bad";return}
+  const {who,before,bust}=r.turn;
+  if(r.finished){S.last={name:r.finished.winner};S.stage="win";render();return}
+  msg.textContent=bust?`Bust! ${who} stays on ${before}.`:s?`${who} scores ${s}.`:`${who} scores nothing.`;
+  msg.className="msg "+(bust?"bad":"good");
   render();
 }
 
@@ -550,6 +783,11 @@ function finishGame(name){
 // Take back the throw that won the game, and the win it gave
 function undoWin(){
   const L=S.last, g=G();if(!L||!g)return;
+  if(S.live){
+    const h=g.hist[g.hist.length-1], r=livePlay({t:"undoWin",ri:S.focus.ri,mi:S.focus.mi,gameId:g.id,expect:g.hist.length,id:h.id});
+    if(!r.ok){$("winInfo").textContent=`Can't undo: ${r.error}.`;return}
+    S.last=null;S.stage="game";$("msg").textContent=`Undid ${g.gp[h.p]}'s turn.`;$("msg").className="msg";render();return;
+  }
   const m=M();
   if(m)Toads.undoGameWin(S.tour,m,L.name);
   else if(S.wins[winKey(g,L.name)])S.wins[winKey(g,L.name)]--;
@@ -558,6 +796,12 @@ function undoWin(){
 }
 
 function undo(){
+  if(S.live){
+    const g=G(), h=g.hist[g.hist.length-1];if(!h)return;
+    const r=livePlay({t:"undo",ri:S.focus.ri,mi:S.focus.mi,gameId:g.id,expect:g.hist.length,id:h.id});
+    $("msg").textContent=r.ok?`Undid ${g.gp[h.p]}'s turn.`:`Can't undo: ${r.error}.`;$("msg").className="msg"+(r.ok?"":" bad");
+    render();return;
+  }
   const g=G(), h=Toads.undoTurn(g);if(!h)return;
   S.stage="game";
   $("msg").textContent=`Undid ${g.gp[h.p]}'s turn.`;$("msg").className="msg";
@@ -566,7 +810,7 @@ function undo(){
 
 /* ---------- wiring ---------- */
 $("modeSingle").addEventListener("click",()=>{S.mode="single";render()});
-$("modeTour").addEventListener("click",()=>{S.mode="tournament";render()});
+$("modeTour").addEventListener("click",()=>{S.mode="tournament";render();if(NET.on)loadLiveList()});
 $("fmtQuali").addEventListener("click",()=>{S.tourFormat="quali";render()});
 $("fmtByes").addEventListener("click",()=>{S.tourFormat="byes";render()});
 $("modeDuo").addEventListener("click",()=>{S.mode="duo";if(!S.teams.length&&S.players.length>=2)addTeam();else render()});
@@ -642,11 +886,28 @@ if(NET.on){
       if(tidyResult(r,"","statsMsg")){await loadDirectory();S.stage="players";$("orgMsg").textContent=`Deleted ${p.name}.`;$("orgMsg").className="msg good";render()}
     });
   });
+  $("liveList").addEventListener("click",e=>{const b=e.target.closest("button[data-follow]");if(b)follow(b.dataset.follow)});
+  $("liveOn").addEventListener("change",()=>{S.liveOn=$("liveOn").checked;NET.liveMsg="";render()});
+  $("liveLeave").addEventListener("click",leaveLive);
+  $("liveShareBtn").addEventListener("click",()=>{NET.shareOpen=!NET.shareOpen;render()});
+  $("liveCopy").addEventListener("click",async()=>{try{await navigator.clipboard.writeText($("liveLink").value);NET.liveNote="Link copied."}catch(e){$("liveLink").select();NET.liveNote="Select the link and copy it."}render()});
+  $("liveEnd").addEventListener("click",()=>{$("liveEndConfirm").hidden=false});
+  $("liveEndNo").addEventListener("click",()=>{$("liveEndConfirm").hidden=true});
+  $("liveEndYes").addEventListener("click",()=>{$("liveEndConfirm").hidden=true;endLive()});
+  $("pinForm").addEventListener("submit",e=>{e.preventDefault();const v=$("pinInput").value.trim(),p=NET.pinFor;if(!v||!p)return;S.live.pin=v;$("pinInput").value="";claimTable(p.k,p.takeover)});
+  $("pinCancel").addEventListener("click",()=>{NET.pinFor=null;NET.liveNote="";render()});
+  $("tableCards").addEventListener("click",e=>{
+    if(!S.live)return;
+    const c=e.target.closest("[data-claim]"),t=e.target.closest("[data-takeover]"),r=e.target.closest("[data-release]");
+    if(c)claimTable(+c.dataset.claim,false);
+    if(t)claimTable(+t.dataset.takeover,true);
+    if(r)releaseTable(+r.dataset.release);
+  });
   $("statsConfirmNo").addEventListener("click",()=>{$("statsConfirm").hidden=true;NET.onConfirm=null});
   $("statsConfirmYes").addEventListener("click",()=>{$("statsConfirm").hidden=true;const f=NET.onConfirm;NET.onConfirm=null;if(f)f()});
 }
 $("shuffleBtn").addEventListener("click",()=>{const a=S.players;for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}render()});
-$("startBtn").addEventListener("click",()=>S.mode==="tournament"?startTournament():(S.tour=null,askOrder(S.mode==="duo"?S.teams.map(t=>t.name.trim()):S.players.slice())));
+$("startBtn").addEventListener("click",()=>S.mode==="tournament"?(liveCreating()?createLive():startTournament()):(S.tour=null,askOrder(S.mode==="duo"?S.teams.map(t=>t.name.trim()):S.players.slice())));
 $("pickGrid").addEventListener("click",e=>{const b=e.target.closest("button[data-p]");if(b)pick(b.dataset.p)});
 $("orderReset").addEventListener("click",()=>{S.ord.order=[];render()});
 $("orderGo").addEventListener("click",()=>beginGame(S.ord.order.slice()));
@@ -659,7 +920,7 @@ $("endTourBtn").addEventListener("click",()=>{$("endTourConfirm").hidden=false})
 $("endTourNo").addEventListener("click",()=>{$("endTourConfirm").hidden=true});
 $("endTourYes").addEventListener("click",()=>{S.tour=null;S.stage="setup";render()});
 $("champNew").addEventListener("click",startTournament);
-$("champChange").addEventListener("click",()=>{S.tour=null;S.stage="setup";render()});
+$("champChange").addEventListener("click",()=>{if(S.live){leaveLive();return}S.tour=null;S.stage="setup";render()});
 $("pad").addEventListener("click",e=>{const b=e.target.closest("button[data-s]");if(b)score(+b.dataset.s)});
 $("finishBtns").addEventListener("click",e=>{const b=e.target.closest("button[data-u]");if(b)score(+$("finishBtns").dataset.s,+b.dataset.u)});
 $("finishCancel").addEventListener("click",closeFinish);
@@ -679,8 +940,10 @@ if(!Array.isArray(S.teams))S.teams=[];
 if(!["tournament","duo"].includes(S.mode))S.mode="single";
 if(!(S.tables>=1))S.tables=1;
 if(S.tour&&S.tour.v!==2)S.tour=null;
-if(S.mode==="tournament"){
-  if(!S.tour)S.stage="setup";
+if(S.live&&(!NET.on||!S.live.tour||!S.live.mine))S.live=null;
+if(S.live&&S.stage==="setup")S.stage="bracket";
+if(S.mode==="tournament"||S.live){
+  if(!isTour())S.stage="setup";
   else if(["game","win","order"].includes(S.stage)&&!M())S.stage="bracket";
 }
 if(["game","win"].includes(S.stage)&&!G())S.stage="setup";
@@ -689,6 +952,15 @@ if(["players","stats"].includes(S.stage)&&(!NET.on||(S.stage==="stats"&&!S.stats
 render();
 if(NET.on){
   loadDirectory();
+  loadLiveList();
+  // A tournament link (#t-<code>) opens that tournament
+  const openHash=()=>{const id=liveHash();if(id&&(!S.live||S.live.id!==id))follow(id)};
+  openHash();window.addEventListener("hashchange",openHash);
+  if(S.live&&!liveHash())setHash(S.live.id);
+  setInterval(()=>{if(S.live&&document.visibilityState==="visible"){if(S.live.queue.length)liveFlush();else liveFetch(false)}},LIVE_POLL);
+  document.addEventListener("visibilitychange",()=>{if(S.live&&document.visibilityState==="visible")liveFlush()});
+  window.addEventListener("online",()=>{if(S.live)liveFlush()});
+  if(S.live)liveFlush();
   window.addEventListener("online",syncGames);
   setInterval(()=>{if(ToadsApi.queued().length)syncGames();else syncNote()},30000);
 }

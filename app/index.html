@@ -9,6 +9,7 @@
 <title>Toads Scorer</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Atkinson+Hyperlegible:wght@400;700&family=Cabin+Sketch:wght@400;700&family=Patrick+Hand&display=swap">
 <link rel="stylesheet" href="css/app.css?v=20261023">
+<meta name="toads-qr" content="js/vendor/qrcode.js?v=20261023">
 </head>
 <body>
 <div class="wrap">
@@ -68,6 +69,19 @@
       <h2><label for="venueInput">Venue</label></h2>
       <input type="text" id="venueInput" list="venueOptions" placeholder="Pub or club (optional)" maxlength="60" autocomplete="off">
       <datalist id="venueOptions"></datalist>
+    </div>
+    <div class="livebox" id="liveBox" hidden>
+      <h2 id="liveListHead">Live tournaments</h2>
+      <ul class="players" id="liveList"></ul>
+      <div id="liveCreate" hidden>
+        <label class="check"><input type="checkbox" id="liveOn"> Run it live: everyone follows it on their phones, and each table scores itself</label>
+        <div class="livefields" id="liveFields" hidden>
+          <input type="text" id="liveName" placeholder="Tournament name" maxlength="40" autocomplete="off" aria-label="Tournament name">
+          <input type="text" id="livePin" inputmode="numeric" pattern="[0-9]*" placeholder="Scoring PIN (4 to 8 digits)" maxlength="8" autocomplete="off" aria-label="Scoring PIN">
+        </div>
+      </div>
+      <p class="hint" id="liveHint"></p>
+      <p class="msg" id="liveMsg" aria-live="polite"></p>
     </div>
     <h2>Players</h2>
     <form id="addForm" class="row">
@@ -156,6 +170,33 @@
   <!-- TOURNAMENT: TABLES + BRACKET -->
   <section id="bracketView" hidden>
     <div class="wrap" style="padding:0;gap:14px">
+      <div class="panel livepanel" id="livePanel" hidden>
+        <div class="viewhead"><h2 id="liveTitle"></h2><button class="ghost" id="liveLeave">Leave</button></div>
+        <p class="hint" id="liveInfo"></p>
+        <p class="hint" id="liveSync" aria-live="polite"></p>
+        <p class="msg" id="liveNote" aria-live="polite"></p>
+        <form class="pinform" id="pinForm" hidden>
+          <label for="pinInput" id="pinLabel"></label>
+          <div class="row">
+            <input type="password" id="pinInput" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off" placeholder="PIN">
+            <button class="primary" type="submit">OK</button>
+            <button class="ghost" type="button" id="pinCancel">Cancel</button>
+          </div>
+        </form>
+        <div class="actions">
+          <button id="liveShareBtn" aria-controls="shareBox">Share</button>
+          <button class="ghost" id="liveEnd">End tournament</button>
+        </div>
+        <div class="confirm" id="liveEndConfirm" hidden>
+          <span>End the tournament for everyone? Scoring stops, and the results stay visible.</span>
+          <div class="actions"><button id="liveEndNo">Keep playing</button><button class="primary" id="liveEndYes">End tournament</button></div>
+        </div>
+        <div class="sharebox" id="shareBox" hidden>
+          <div class="qr" id="liveQr"></div>
+          <div class="row"><input type="text" id="liveLink" readonly aria-label="Tournament link"><button id="liveCopy">Copy link</button></div>
+          <p class="hint">Anyone with the link can follow the tables and bracket. Scoring a table needs the PIN.</p>
+        </div>
+      </div>
       <div class="panel win" id="champPanel" hidden>
         <h2>Tournament champion</h2>
         <div class="winrow"><span class="trophy" id="champToad" aria-hidden="true"></span><div class="who" id="champName"></div></div>
@@ -228,7 +269,7 @@
     <button class="ghost" id="undoWinBtn">Undo winning throw</button>
   </section>
   <p class="hint" id="syncNote" style="text-align:center" aria-live="polite" hidden></p>
-  <p class="hint" style="text-align:center">Version 23 Oct 2026 · Player stats</p>
+  <p class="hint" style="text-align:center">Version 23 Oct 2026 · Live tournaments</p>
 </div>
 
 <script src="config.js?v=20261023"></script>

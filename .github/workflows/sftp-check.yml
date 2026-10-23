@@ -37,7 +37,7 @@ jobs:
           SSHPASS=$(printf '%s' "$SSHPASS" | tr -d '\r\n'); export SSHPASS
           case "$SFTP_USER" in *[!A-Za-z0-9._-]*) echo "::error::SFTP_USER still has unusual characters after trimming (length ${#SFTP_USER})";; esac
           sudo apt-get install -y -qq sshpass >/dev/null
-          printf 'pwd\ncd %s\npwd\nls -1\n' "$SFTP_ROOT_PATH" > batch
+          printf 'pwd\ncd %s\npwd\nls -1\n-ls -1 html\n' "$SFTP_ROOT_PATH" > batch
           sshpass -e sftp -oBatchMode=no -oStrictHostKeyChecking=accept-new -P "${SFTP_PORT:-22}" -b batch "$SFTP_USER@$SFTP_HOST" | tee out.txt
           grep -q 'wp-config.php' out.txt && echo "OK: wp-config.php found in the root path" || { echo "::error::wp-config.php not found in SFTP_ROOT_PATH"; exit 1; }
           grep -qx 'toads31' out.txt && echo "OK: toads31 folder found" || echo "::warning::no toads31 folder in the root path"

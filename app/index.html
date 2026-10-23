@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Cache-Control" content="no-cache">
+<meta name="description" content="Toad in the Hole scorer: count down from 31, single games, duo teams or knockout tournaments across several tables.">
+<style>*,*::before,*::after{box-sizing:border-box}:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>Toads Scorer</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Atkinson+Hyperlegible:wght@400;700&family=Cabin+Sketch:wght@400;700&family=Patrick+Hand&display=swap">
+<link rel="stylesheet" href="css/app.css?v=20261023">
+</head>
+<body>
+<div class="wrap">
+  <header class="brand">
+    <svg class="logo" viewBox="0 0 80 100" role="img" aria-label="Toad in the hole table">
+      <!-- backboard -->
+      <rect x="17" y="3" width="46" height="30" rx="6" fill="var(--wood)"/>
+      <path d="M21 9h38M21 15h38M21 21h38" stroke="var(--wood-dark)" stroke-width=".6" opacity=".35"/>
+      <!-- lead top in perspective -->
+      <polygon points="18,27 62,27 71,53 9,53" fill="var(--leadtop)"/>
+      <polygon points="9,53 71,53 71,56 9,56" fill="var(--leadedge)"/>
+      <path d="M22 33l4 1M48 31l5 2M30 45l6-1M55 47l4 1M16 49l5 1M42 50l4-1" stroke="var(--leadedge)" stroke-width=".7" opacity=".6"/>
+      <ellipse cx="40" cy="39" rx="4.6" ry="2.8" fill="var(--hole)"/>
+      <!-- a brass toad resting on the lead -->
+      <ellipse cx="56" cy="46" rx="4" ry="1.9" fill="var(--brass)"/>
+      <!-- apron and drawer -->
+      <rect x="10" y="56" width="60" height="15" fill="var(--wood-dark)"/>
+      <rect x="16" y="59" width="48" height="10" rx="1" fill="var(--wood)"/>
+      <path d="M35 62.5a5 3.2 0 0 0 10 0z" fill="var(--brass)"/>
+      <!-- barley-twist legs -->
+      <g fill="var(--wood-dark)">
+        <rect x="13" y="71" width="6" height="25" rx="1"/>
+        <rect x="61" y="71" width="6" height="25" rx="1"/>
+        <rect x="16" y="89" width="48" height="3"/>
+      </g>
+      <g stroke="var(--wood)" stroke-width="1.2" stroke-linecap="round">
+        <path d="M13.6 74l4.8 2.5M13.6 78.5l4.8 2.5M13.6 83l4.8 2.5M61.6 74l4.8 2.5M61.6 78.5l4.8 2.5M61.6 83l4.8 2.5"/>
+      </g>
+    </svg>
+    <div>
+      <h1>Toads <span>31</span></h1>
+      <p class="sub">Count down from 31. 2 in the hole, 1 on the table. Finish exactly.</p>
+    </div>
+  </header>
+
+  <!-- SETUP -->
+  <section id="setup" class="panel">
+    <div class="seg" role="group" aria-label="Game type">
+      <button type="button" id="modeSingle" aria-pressed="true">Single game</button>
+      <button type="button" id="modeDuo" aria-pressed="false">Duo</button>
+      <button type="button" id="modeTour" aria-pressed="false">Tournament</button>
+    </div>
+    <p class="hint" id="modeHint"></p>
+    <div class="seg seg2" id="formatRow" role="group" aria-label="Tournament format" hidden>
+      <button type="button" id="fmtQuali" aria-pressed="true">Qualifying round</button>
+      <button type="button" id="fmtByes" aria-pressed="false">Byes</button>
+    </div>
+    <div class="stepper" id="tablesRow" hidden>
+      <span><b>Tables available</b><br><span class="hint">Matches run side by side, one per table.</span></span>
+      <div class="step">
+        <button type="button" id="tablesMinus" aria-label="Fewer tables">−</button>
+        <output id="tablesVal">1</output>
+        <button type="button" id="tablesPlus" aria-label="More tables">+</button>
+      </div>
+    </div>
+    <h2>Players</h2>
+    <form id="addForm" class="row">
+      <input type="text" id="nameInput" placeholder="Player name" maxlength="24" autocomplete="off" aria-label="Player name">
+      <button class="primary" type="submit">Add</button>
+    </form>
+    <ul class="players" id="playerList"></ul>
+    <p class="empty" id="noPlayers">Add one or more players.</p>
+    <div class="teamsbox" id="teamsBox" hidden>
+      <h2>Teams</h2>
+      <div class="teamlist" id="teamList"></div>
+      <button class="ghost" id="addTeamBtn">Add a team</button>
+      <p class="hint" id="teamHint"></p>
+    </div>
+    <button class="ghost" id="shuffleBtn" hidden>Shuffle the draw</button>
+    <button class="primary big" id="startBtn" disabled>Start game</button>
+  </section>
+
+  <!-- THROWING ORDER -->
+  <section id="orderView" class="panel" hidden>
+    <h2 id="orderTitle">Throwing order</h2>
+    <p class="hint" id="orderHint">Each player throws one toad. Tap the players from closest to the hole to furthest away.</p>
+    <ol class="picked" id="pickedList"></ol>
+    <div class="pickgrid" id="pickGrid"></div>
+    <div class="actions">
+      <button class="ghost" id="orderBack">Back</button>
+      <button class="ghost" id="orderReset">Start over</button>
+    </div>
+    <button class="primary big" id="orderGo" disabled>Start game</button>
+  </section>
+
+  <!-- TOURNAMENT: TABLES + BRACKET -->
+  <section id="bracketView" hidden>
+    <div class="wrap" style="padding:0;gap:14px">
+      <div class="panel win" id="champPanel" hidden>
+        <h2>Tournament champion</h2>
+        <div class="winrow"><span class="trophy" id="champToad" aria-hidden="true"></span><div class="who" id="champName"></div></div>
+        <div class="actions">
+          <button class="primary" id="champNew">New tournament</button>
+          <button id="champChange">Change players</button>
+        </div>
+      </div>
+      <div class="panel" id="tablesPanel">
+        <button type="button" class="collapse" id="tablesToggle" aria-expanded="true" aria-controls="tablesBody">
+          <h2>Tables</h2><span class="tsum" id="tablesSummary"></span><span class="chev" aria-hidden="true"></span>
+        </button>
+        <div class="tbody" id="tablesBody">
+          <div class="tables" id="tableCards"></div>
+          <div class="nextbox" id="nextBox" hidden>
+            <button type="button" class="collapse" id="nextToggle" aria-expanded="false" aria-controls="nextList"><h2>Next to come</h2><span class="tsum" id="nextSummary"></span><span class="chev" aria-hidden="true"></span></button>
+            <ul class="nextlist" id="nextList" hidden></ul>
+          </div>
+          <div class="actions"><button class="ghost" id="endTourBtn">End tournament</button></div>
+          <div class="confirm" id="endTourConfirm" hidden>
+            <span>End the tournament and go back to players? All results are lost.</span>
+            <div class="actions"><button id="endTourNo">Keep playing</button><button class="primary" id="endTourYes">End tournament</button></div>
+          </div>
+        </div>
+      </div>
+      <div class="cols-wrap chalk" id="qualiWrap" hidden><div id="quali"></div></div>
+      <div class="cols-wrap chalk"><div id="bracket"></div></div>
+    </div>
+  </section>
+
+  <!-- GAME -->
+  <section id="game" hidden>
+    <div class="wrap" style="padding:0;gap:14px">
+      <div class="panel turn">
+        <p class="need" id="matchInfo" hidden></p>
+        <h2>Throwing now</h2>
+        <div class="who" id="turnName"></div>
+        <div class="need" id="turnNeed"></div>
+        <p class="msg" id="msg" aria-live="polite"></p>
+        <div class="pad" id="pad"></div>
+        <div class="ask" id="finishAsk" hidden>
+          <p id="finishQ"></p>
+          <div class="askbtns" id="finishBtns"></div>
+          <button class="ghost" id="finishCancel">Wrong score, go back</button>
+        </div>
+        <div class="actions">
+          <button class="ghost" id="undoBtn">Undo last turn</button>
+          <button class="ghost" id="quitBtn">End game</button>
+        </div>
+        <div class="confirm" id="quitConfirm" hidden>
+          <span>End this game and go back to players?</span>
+          <div class="actions"><button id="quitNo">Keep playing</button><button class="primary" id="quitYes">End game</button></div>
+        </div>
+      </div>
+      <div class="cols-wrap chalk"><div id="board"></div></div>
+    </div>
+  </section>
+
+  <!-- WIN -->
+  <section id="win" class="panel win" hidden>
+    <h2 id="winLabel">Winner</h2>
+    <div class="winrow"><span class="trophy" id="trophy" aria-hidden="true"></span><div class="who" id="winName"></div></div>
+    <p class="sub" id="winInfo"></p>
+    <div class="actions">
+      <button class="primary" id="againBtn">Play again</button>
+      <button id="changeBtn">Change players</button>
+    </div>
+    <div class="cols-wrap chalk" style="text-align:left"><div id="results"></div></div>
+    <p class="hint">Avg / toad = points scored ÷ toads thrown, from 0 to 2. Busts count the points actually thrown, even though they don't change the score.</p>
+    <button class="ghost" id="undoWinBtn">Undo winning throw</button>
+  </section>
+  <p class="hint" style="text-align:center">Version 23 Oct 2026 · Split files</p>
+</div>
+
+<script src="js/rules.js?v=20261023"></script>
+<script src="js/app.js?v=20261023"></script>
+</body>
+</html>

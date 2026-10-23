@@ -107,6 +107,9 @@ export async function saveGame(db, table, input, now = new Date()) {
       Item: {
         PK: `PLAYER#${p.playerId}`, SK: `GAME#${g.finished}#${g.id}`, gameId: g.id, mode: g.mode, finished: g.finished,
         venue: meta.venue, venueId: meta.venueId, side: p.side, won: p.won, pts: p.pts, toads: p.toads, sides: g.sides.length,
+        rounds: g.rounds, winner: g.winner,
+        // everyone on another side, for head-to-head records
+        opponents: players.filter(o => o.side !== p.side).map(o => ({ name: o.name, playerId: o.playerId, won: o.won })),
       },
     },
   }));

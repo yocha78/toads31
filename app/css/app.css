@@ -213,3 +213,24 @@ ul.players li:last-child{border-bottom:0}
 .chips button{padding:8px 12px;border-radius:999px}
 .tag{font-size:.75rem;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:1px 8px;margin-left:6px;white-space:nowrap}
 .x.reg{color:var(--brass)}
+/* online only: players & stats */
+.viewhead{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.viewhead button{padding:8px 12px}
+.orgbox{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line);padding-top:12px}
+.orgon{display:flex;flex-direction:column;gap:8px}
+#statsView .who{font-family:var(--display);font-size:2rem;overflow-wrap:anywhere}
+select{font:inherit;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);min-width:0;max-width:100%}
+.row select{flex:1}
+.tiles{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.tile{background:var(--bg);border-radius:10px;padding:10px 12px}
+.tile b{display:block;font-family:var(--display);font-size:1.6rem;font-weight:400;font-variant-numeric:tabular-nums}
+.tile span{color:var(--muted);font-size:.85rem}
+table.st{width:100%;border-collapse:collapse;font-size:.95rem;font-variant-numeric:tabular-nums}
+table.st th{text-align:left;font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:400;padding:4px 6px}
+table.st td{padding:6px;border-top:1px solid var(--line)}
+table.st td.n,table.st th.n{text-align:right}
+.res-w{color:var(--good);font-weight:700}
+.res-l{color:var(--muted)}
+#statsBody{display:flex;flex-direction:column;gap:10px}
+#statsBody p{margin:0}
+#statsMsg:empty,#orgMsg:empty{display:none}

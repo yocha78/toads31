@@ -44,10 +44,21 @@ The RoleArn is not a password, but keeping it as a secret keeps it out of the lo
 
 The next deploy to `test` creates the AWS stack `toads31-test` (a database table, the API and a health check), writes its address into the app's `config.js`, and checks that `/health` answers. The first deploy to `main` creates the `toads31` stack in the same way, after your approval.
 
+## 6. Set the organiser password
+
+The organiser logs in on the Players screen to rename, merge or delete players and venues. The password lives in AWS, not in GitHub or the app. Set one for each site (they can be the same):
+
+1. In AWS (region **Europe (London) eu-west-2**), search for **Systems Manager** and open **Parameter Store** → **Create parameter**.
+2. Name: `/toads31/test/organiser-password` (and later `/toads31/live/organiser-password` for the live site).
+3. Tier **Standard**, type **SecureString**, KMS key source **My current account**, key `alias/aws/ssm`.
+4. Value: the password → **Create parameter**.
+
+To change it later, open the parameter → **Edit**. Anyone logged in as organiser is signed out within 5 minutes. Without the parameter, the organiser login says it hasn't been set up and everything else works as before.
+
 ## Updating the role
 
 If the template changes, update the stack instead of creating a new one: **CloudFormation → Stacks → `toads31-github-access` → Update → Replace existing template → Upload a template file**, pick the new file, then **Next** through the pages, tick the acknowledgement and **Submit**. The RoleArn stays the same.
 
 ## What the role can do
 
-Only what deploying Toads 31 needs, in eu-west-2: manage the `toads31*` CloudFormation stacks, Lambda functions, DynamoDB tables, log groups and the IAM roles of those functions; API Gateway; the bucket SAM uses for uploads; and read `/toads31/*` parameters (the organiser password, later). Only the `test` and `live` deploy jobs of `yocha78/toads31` can use it.
+Only what deploying Toads 31 needs, in eu-west-2: manage the `toads31*` CloudFormation stacks, Lambda functions, DynamoDB tables, log groups and the IAM roles of those functions; API Gateway; the bucket SAM uses for uploads; and read `/toads31/*` parameters (the organiser password). Only the `test` and `live` deploy jobs of `yocha78/toads31` can use it.

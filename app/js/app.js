@@ -1,4 +1,5 @@
-const KEY="toads31", MAX_TABLES=8;
+// The test copy sits on the same website as the live one, so it keeps its own saved state
+const KEY=(window.TOADS_CONFIG||{}).stage==="test"?"toads31-test":"toads31", MAX_TABLES=8;
 // Game rules live in rules.js (window.Toads); this file is the page: state, screens and buttons.
 const {TARGET,coinsFor,newG,throwerOf,buildTour,gameNo,ready}=Toads;
 const TOAD=`<svg class="toad" viewBox="0 0 16 14" aria-hidden="true"><circle cx="4.5" cy="3.5" r="2.6"/><circle cx="11.5" cy="3.5" r="2.6"/><ellipse cx="8" cy="9" rx="7" ry="4.6"/><circle cx="4.5" cy="3.2" r="1" fill="var(--surface)"/><circle cx="11.5" cy="3.2" r="1" fill="var(--surface)"/></svg>`;
@@ -99,6 +100,7 @@ const regBtn=(p,i)=>NET.on&&!findIn(NET.players,p)?`<button class="x reg" data-r
 async function loadDirectory(){
   const [pl,vn]=await Promise.all([ToadsApi.list("players"),ToadsApi.list("venues")]);
   NET.players=pl.items;NET.venues=vn.items;NET.fresh=pl.fresh&&vn.fresh;
+  if(NET.fresh)shareVenue();
   if(S.stage==="setup")render();
 }
 function renderOnline(){
@@ -134,7 +136,18 @@ async function registerPlayer(p){
 function rememberVenue(){
   const v=$("venueInput").value.replace(/\s+/g," ").trim(), known=v&&findIn(NET.venues,v);
   S.venue=known?known.name:v;save();
-  if(v&&!known&&NET.on)ToadsApi.add("venues",{name:v}).then(r=>{if(r.item)NET.venues=NET.venues.filter(x=>x.id!==r.item.id).concat([r.item])});
+  shareVenue();
+}
+// Add the venue in use to the shared list if it isn't there yet: when typed, when the lists arrive
+// (a remembered venue may never have reached them) and on Start
+function shareVenue(){
+  const v=S.venue;
+  if(!NET.on||!v||findIn(NET.venues,v)||NET.saving["venue:"+v])return;
+  NET.saving["venue:"+v]=true;
+  ToadsApi.add("venues",{name:v}).then(r=>{
+    delete NET.saving["venue:"+v];
+    if(r.item){NET.venues=NET.venues.filter(x=>x.id!==r.item.id).concat([r.item]);if(r.item.name!==S.venue&&nameKey(r.item.name)===nameKey(S.venue)){S.venue=r.item.name;save()}if(S.stage==="setup")render()}
+  });
 }
 
 /* ---------- duo teams ---------- */
@@ -485,6 +498,7 @@ if(NET.on){
   $("regChips").addEventListener("click",e=>{const b=e.target.closest("button[data-add]");if(b&&!S.players.includes(b.dataset.add)){S.players.push(b.dataset.add);$("nameInput").value="";NET.note="";render()}});
   $("nameInput").addEventListener("input",()=>renderOnline());
   $("venueInput").addEventListener("change",rememberVenue);
+  $("startBtn").addEventListener("click",()=>{if(document.activeElement===$("venueInput"))rememberVenue();else shareVenue()});
 }
 $("shuffleBtn").addEventListener("click",()=>{const a=S.players;for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}render()});
 $("startBtn").addEventListener("click",()=>S.mode==="tournament"?startTournament():(S.tour=null,askOrder(S.mode==="duo"?S.teams.map(t=>t.name.trim()):S.players.slice())));

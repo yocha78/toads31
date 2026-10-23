@@ -1,7 +1,9 @@
 // Talks to the Toads 31 API when config.js gives an address. Lists are kept on the phone too,
 // so the app carries on with the last saved list when the signal drops.
 window.ToadsApi=(()=>{
-  const cfg=window.TOADS_CONFIG||{}, base=cfg.apiUrl?String(cfg.apiUrl).replace(/\/+$/,""):null, CACHE="toads31.cache.";
+  const cfg=window.TOADS_CONFIG||{}, base=cfg.apiUrl?String(cfg.apiUrl).replace(/\/+$/,""):null, CACHE=`toads31.cache.${cfg.stage||"local"}.`;
+  // lists saved before test and live were kept apart
+  try{localStorage.removeItem("toads31.cache.players");localStorage.removeItem("toads31.cache.venues")}catch(e){}
   async function call(method,path,body){
     const ctl=new AbortController(), t=setTimeout(()=>ctl.abort(),6000);
     try{

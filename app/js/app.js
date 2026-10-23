@@ -37,8 +37,8 @@ function matchWins(name){
 
 /* ---------- rendering ---------- */
 function render(){
-  for(const id of["setup","orderView","bracketView","game","win"])$(id).hidden=true;
-  const views={setup:["setup",renderSetup],order:["orderView",renderOrder],bracket:["bracketView",renderHub],game:["game",renderGame],win:["win",renderWin]};
+  for(const id of["setup","orderView","bracketView","game","win","playersView","statsView"])$(id).hidden=true;
+  const views={setup:["setup",renderSetup],players:["playersView",renderPlayers],stats:["statsView",renderStats],order:["orderView",renderOrder],bracket:["bracketView",renderHub],game:["game",renderGame],win:["win",renderWin]};
   const v=views[S.stage];
   if(!v){S.stage="setup";return render()}
   $(v[0]).hidden=false;v[1]();
@@ -69,6 +69,7 @@ function renderSetup(){
   $("noPlayers").hidden=n>0;
   $("noPlayers").textContent=T?"Add at least two players.":D?"Add players, then put them into teams of two below.":"Add one or more players.";
   $("shuffleBtn").hidden=!(T&&n>2);
+  $("statsBtn").hidden=!NET.on;
   if(NET.on)renderOnline();
   setupStart();
 }
@@ -103,7 +104,7 @@ async function loadDirectory(){
   const [pl,vn]=await Promise.all([ToadsApi.list("players"),ToadsApi.list("venues")]);
   NET.players=pl.items;NET.venues=vn.items;NET.fresh=pl.fresh&&vn.fresh;
   if(NET.fresh)shareVenue();
-  if(S.stage==="setup")render();
+  if(["setup","players","stats"].includes(S.stage))render();
 }
 function renderOnline(){
   $("venueBox").hidden=false;
@@ -151,6 +152,78 @@ function syncNote(){
     :NET.saved&&Date.now()-NET.saved<8000?"Game saved.":"";
   $("syncNote").hidden=!$("syncNote").textContent;
 }
+/* ---------- players & stats, and the organiser's tidy-up (online only) ---------- */
+const fmtDate=iso=>new Date(iso).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"});
+const fmtMonth=m=>new Date(m+"-01T12:00:00Z").toLocaleDateString("en-GB",{month:"short",year:"numeric"});
+const fmtAvg=a=>a==null?"–":a.toFixed(2);
+function renderPlayers(){
+  const list=NET.players.slice().sort(byName);
+  $("dirList").innerHTML=list.map(p=>`<button type="button" data-stats="${esc(p.id)}">${esc(p.name)}</button>`).join("");
+  $("playersHint").textContent=list.length?"Tap a player to see their stats."+(NET.fresh?"":" (Offline: last saved list.)")
+    :NET.fresh?"No registered players yet. Register players from the setup screen.":"Can't reach the players list right now.";
+  const org=ToadsApi.organiser();
+  $("orgLogin").hidden=!!org;$("orgOn").hidden=!org;
+  if(org)$("venueAdmin").innerHTML=NET.venues.slice().sort(byName).map(v=>`<li data-venue="${esc(v.id)}">
+    <input type="text" value="${esc(v.name)}" maxlength="60" aria-label="Venue name"><button class="x" data-vsave>Save</button><button class="x" data-vdel>${NET.armed==="venue:"+v.id?"Tap again to delete":"Delete"}</button></li>`).join("")||`<li class="hint">No venues yet.</li>`;
+}
+function renderStats(){
+  const key=S.statsId+"|"+(S.statsVenue||""), d=NET.statsKey===key?NET.stats:null, known=NET.players.find(p=>p.id===S.statsId);
+  if(NET.statsKey!==key)loadStats(key);
+  $("statsName").textContent=d&&d.player?d.player.name:known?known.name:"";
+  const bad=d&&(d.offline||d.error);
+  $("statsMsg").textContent=!d?"Loading…":d.offline?"Can't reach the stats right now. Try again when there's signal.":d.error?(d.status===404?"This player is no longer on the list.":d.error):NET.statsNote||"";
+  $("statsMsg").className="msg"+(bad?" bad":NET.statsNote&&d?" good":"");
+  const ok=d&&d.totals;
+  const pubs=ok?d.venues.filter(v=>v.venueId):[];
+  $("statsVenue").innerHTML=`<option value="">All pubs</option>`+pubs.map(v=>`<option value="${esc(v.venueId)}"${v.venueId===S.statsVenue?" selected":""}>${esc(v.name)} (${v.played})</option>`).join("");
+  $("statsVenue").hidden=$("statsVenue").previousElementSibling.hidden=!ok||!pubs.length;
+  if(!ok){$("statsBody").innerHTML="";}
+  else if(!d.totals.played)$("statsBody").innerHTML=`<p class="empty">No saved games ${S.statsVenue?"at this pub ":""}yet.</p>`;
+  else{
+    const t=d.totals, rate=Math.round(100*t.won/t.played), b=d.best;
+    const where=g=>g.venue?` at ${esc(g.venue)}`:"";
+    $("statsBody").innerHTML=`<div class="tiles">
+      <div class="tile"><b>${t.played}</b><span>games played</span></div><div class="tile"><b>${t.won}</b><span>games won</span></div>
+      <div class="tile"><b>${rate}%</b><span>win rate</span></div><div class="tile"><b>${fmtAvg(t.avg)}</b><span>average per toad</span></div></div>
+      ${b?`<p><b>Best game:</b> ${fmtAvg(b.avg)} per toad, ${b.won?"won":"lost"}${where(b)} on ${fmtDate(b.finished)}${b.sides>1?` (${b.sides} ${b.mode==="duo"?"teams":"players"})`:" (solo)"}.</p>`:""}
+      <h2>By month</h2><table class="st"><tr><th>Month</th><th class="n">Played</th><th class="n">Won</th><th class="n">Avg</th></tr>
+      ${d.months.slice().reverse().map(m=>`<tr><td>${fmtMonth(m.month)}</td><td class="n">${m.played}</td><td class="n">${m.won}</td><td class="n">${fmtAvg(m.avg)}</td></tr>`).join("")}</table>
+      ${d.headToHead.length?`<h2>Head to head</h2><table class="st"><tr><th>Against</th><th class="n">Played</th><th class="n">Won</th><th class="n">Lost</th></tr>
+      ${d.headToHead.map(o=>`<tr><td>${esc(o.name)}${o.playerId?"":' <span class="tag">guest</span>'}</td><td class="n">${o.played}</td><td class="n">${o.won}</td><td class="n">${o.lost}</td></tr>`).join("")}</table>`:""}
+      <h2>Latest games</h2><table class="st"><tr><th>Date</th><th>Pub</th><th>Result</th><th class="n">Avg</th></tr>
+      ${d.recent.map(g=>`<tr><td>${fmtDate(g.finished)}</td><td>${esc(g.venue||"–")}</td><td class="${g.won?"res-w":"res-l"}">${g.won?"Won":g.winner?esc(g.winner)+" won":"Lost"}${g.sides>1?"":" (solo)"}</td><td class="n">${fmtAvg(g.avg)}</td></tr>`).join("")}</table>`;
+  }
+  const org=ToadsApi.organiser(), p=d&&d.player;
+  $("statsOrg").hidden=!(org&&p);
+  if(org&&p){
+    if(document.activeElement!==$("renameInput")&&NET.renameFor!==p.id){$("renameInput").value=p.name;NET.renameFor=p.id}
+    $("mergeInto").innerHTML=`<option value="">Merge into…</option>`+NET.players.filter(x=>x.id!==p.id).sort(byName).map(x=>`<option value="${esc(x.id)}">${esc(x.name)}</option>`).join("");
+  }
+}
+async function loadStats(key){
+  NET.statsKey=key;NET.stats=null;
+  const r=await ToadsApi.stats(S.statsId,S.statsVenue||null);
+  if(NET.statsKey!==key)return;
+  NET.stats=r;
+  if(S.stage==="stats")render();
+}
+const reloadStats=()=>{NET.statsKey=null;render()};
+function showPlayer(id){NET.statsNote=null;S.statsId=id;S.statsVenue="";NET.statsKey=null;NET.renameFor=null;$("statsConfirm").hidden=true;S.stage="stats";render();window.scrollTo(0,0)}
+// Ask before a merge or delete; the answer runs fn
+function confirmStats(text,fn){$("statsConfirmText").textContent=text;$("statsConfirm").hidden=false;NET.onConfirm=fn}
+function tidyResult(r,okMsg,el){
+  const msg=$(el);
+  if(r.item||r.moved!=null){msg.textContent=okMsg;msg.className="msg good";return true}
+  msg.textContent=r.offline?"No signal. Try again in a moment.":r.expired?"Your organiser login has run out. Log in again on the Players screen.":`That didn't work: ${r.error}.`;
+  msg.className="msg bad";return false;
+}
+// A renamed or merged player: use the new name in the game being set up
+function renamePlayer(from,to){
+  if(from===to||!S.players.includes(from)||S.players.includes(to))return;
+  S.players=S.players.map(x=>x===from?to:x);
+  S.teams.forEach(t=>{if(t.a===from)t.a=to;if(t.b===from)t.b=to});
+}
+
 function rememberVenue(){
   const v=$("venueInput").value.replace(/\s+/g," ").trim(), known=v&&findIn(NET.venues,v);
   S.venue=known?known.name:v;save();
@@ -522,6 +595,55 @@ if(NET.on){
   $("nameInput").addEventListener("input",()=>renderOnline());
   $("venueInput").addEventListener("change",rememberVenue);
   $("startBtn").addEventListener("click",()=>{if(document.activeElement===$("venueInput"))rememberVenue();else shareVenue()});
+  $("statsBtn").addEventListener("click",()=>{S.stage="players";render();loadDirectory();window.scrollTo(0,0)});
+  $("playersBack").addEventListener("click",()=>{S.stage="setup";render()});
+  $("statsBack").addEventListener("click",()=>{S.stage="players";render()});
+  $("dirList").addEventListener("click",e=>{const b=e.target.closest("button[data-stats]");if(b)showPlayer(b.dataset.stats)});
+  $("statsVenue").addEventListener("change",()=>{S.statsVenue=$("statsVenue").value;reloadStats()});
+  $("orgLogin").addEventListener("submit",async e=>{
+    e.preventDefault();const pw=$("orgPassword").value;if(!pw)return;
+    const r=await ToadsApi.login(pw);
+    $("orgMsg").textContent=r.ok?"Logged in.":r.offline?"No signal. Try again in a moment.":r.error==="wrong password"?"Wrong password.":`Can't log in: ${r.error}.`;
+    $("orgMsg").className="msg "+(r.ok?"good":"bad");
+    if(r.ok)$("orgPassword").value="";
+    render();
+  });
+  $("orgLogout").addEventListener("click",()=>{ToadsApi.logout();$("orgMsg").textContent="Logged out.";$("orgMsg").className="msg";render()});
+  $("venueAdmin").addEventListener("click",async e=>{
+    const li=e.target.closest("li[data-venue]");if(!li)return;
+    const id=li.dataset.venue, v=NET.venues.find(x=>x.id===id);if(!v)return;
+    if(e.target.closest("[data-vsave]")){
+      const r=await ToadsApi.tidy("PATCH","venues",id,{name:li.querySelector("input").value});
+      if(tidyResult(r,`Saved ${r.item&&r.item.name}.`,"orgMsg")){if(S.venue===v.name)S.venue=r.item.name;await loadDirectory()}
+    }
+    if(e.target.closest("[data-vdel]")){
+      if(NET.armed!=="venue:"+id){NET.armed="venue:"+id;render();return}
+      NET.armed=null;
+      const r=await ToadsApi.tidy("DELETE","venues",id);
+      if(tidyResult(r,`Deleted ${v.name}.`,"orgMsg"))await loadDirectory();else render();
+    }
+  });
+  $("renameForm").addEventListener("submit",async e=>{
+    e.preventDefault();const d=NET.stats,p=d&&d.player;if(!p)return;
+    const r=await ToadsApi.tidy("PATCH","players",p.id,{name:$("renameInput").value});
+    if(tidyResult(r,`Renamed to ${r.item&&r.item.name}.`,"statsMsg")){renamePlayer(p.name,r.item.name);NET.renameFor=null;NET.statsNote=`Renamed to ${r.item.name}.`;await loadDirectory();reloadStats()}
+  });
+  $("mergeBtn").addEventListener("click",()=>{
+    const d=NET.stats,p=d&&d.player,into=NET.players.find(x=>x.id===$("mergeInto").value);if(!p||!into)return;
+    confirmStats(`Merge ${p.name} into ${into.name}? ${p.name}'s games move to ${into.name} and ${p.name} is removed from the list.`,async()=>{
+      const r=await ToadsApi.tidy("POST","players",p.id,{into:into.id},"/merge");
+      if(tidyResult(r,"",  "statsMsg")){renamePlayer(p.name,into.name);await loadDirectory();showPlayer(into.id);NET.statsNote=`Merged ${p.name} into ${into.name} (${r.moved} game${r.moved===1?"":"s"} moved).`;render()}
+    });
+  });
+  $("deletePlayerBtn").addEventListener("click",()=>{
+    const d=NET.stats,p=d&&d.player;if(!p)return;
+    confirmStats(`Delete ${p.name} and their stats? Saved games keep the name, like a guest's. This can't be undone.`,async()=>{
+      const r=await ToadsApi.tidy("DELETE","players",p.id);
+      if(tidyResult(r,"","statsMsg")){await loadDirectory();S.stage="players";$("orgMsg").textContent=`Deleted ${p.name}.`;$("orgMsg").className="msg good";render()}
+    });
+  });
+  $("statsConfirmNo").addEventListener("click",()=>{$("statsConfirm").hidden=true;NET.onConfirm=null});
+  $("statsConfirmYes").addEventListener("click",()=>{$("statsConfirm").hidden=true;const f=NET.onConfirm;NET.onConfirm=null;if(f)f()});
 }
 $("shuffleBtn").addEventListener("click",()=>{const a=S.players;for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}render()});
 $("startBtn").addEventListener("click",()=>S.mode==="tournament"?startTournament():(S.tour=null,askOrder(S.mode==="duo"?S.teams.map(t=>t.name.trim()):S.players.slice())));
@@ -563,6 +685,7 @@ if(S.mode==="tournament"){
 }
 if(["game","win"].includes(S.stage)&&!G())S.stage="setup";
 if(S.stage==="order"&&!S.ord)S.stage=isTour()?"bracket":"setup";
+if(["players","stats"].includes(S.stage)&&(!NET.on||(S.stage==="stats"&&!S.statsId)))S.stage="setup";
 render();
 if(NET.on){
   loadDirectory();

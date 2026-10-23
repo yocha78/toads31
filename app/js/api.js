@@ -4,10 +4,12 @@ window.ToadsApi=(()=>{
   const cfg=window.TOADS_CONFIG||{}, base=cfg.apiUrl?String(cfg.apiUrl).replace(/\/+$/,""):null, CACHE=`toads31.cache.${cfg.stage||"local"}.`;
   // lists saved before test and live were kept apart
   try{localStorage.removeItem("toads31.cache.players");localStorage.removeItem("toads31.cache.venues")}catch(e){}
-  async function call(method,path,body){
-    const ctl=new AbortController(), t=setTimeout(()=>ctl.abort(),6000);
+  async function call(method,path,body,token){
+    const ctl=new AbortController(), t=setTimeout(()=>ctl.abort(),6000), headers={};
+    if(body)headers["content-type"]="application/json";
+    if(token)headers.authorization="Bearer "+token;
     try{
-      const r=await fetch(base+path,{method,headers:body?{"content-type":"application/json"}:{},body:body?JSON.stringify(body):undefined,signal:ctl.signal});
+      const r=await fetch(base+path,{method,headers,body:body?JSON.stringify(body):undefined,signal:ctl.signal});
       let data=null;try{data=await r.json()}catch(e){}
       return {status:r.status,data};
     }finally{clearTimeout(t)}
@@ -17,6 +19,7 @@ window.ToadsApi=(()=>{
   const read=k=>{try{const v=JSON.parse(localStorage.getItem(k));return Array.isArray(v)?v:[]}catch(e){return[]}};
   const write=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
   let flushing=false;
+  const ORG=`toads31.organiser.${cfg.stage||"local"}`;
   function cached(kind){try{const v=JSON.parse(localStorage.getItem(CACHE+kind));return Array.isArray(v)?v:[]}catch(e){return[]}}
   function keep(kind,items){try{localStorage.setItem(CACHE+kind,JSON.stringify(items))}catch(e){}}
   return {
@@ -59,6 +62,27 @@ window.ToadsApi=(()=>{
         return {item,created:r.status===201};
       }
       return {error:(r.data&&r.data.error)||`Something went wrong (${r.status})`};
+    },
+    // A player's stats, optionally at one pub → data, or {offline:true} / {error}
+    async stats(id,venueId){
+      let r;try{r=await call("GET",`/players/${encodeURIComponent(id)}/stats`+(venueId?`?venue=${encodeURIComponent(venueId)}`:""))}catch(e){return{offline:true}}
+      return r.status===200?r.data:{error:(r.data&&r.data.error)||`Something went wrong (${r.status})`,status:r.status};
+    },
+    /* Organiser: the token is kept on this phone until it expires (12 hours) */
+    organiser(){try{const v=JSON.parse(localStorage.getItem(ORG));return v&&Date.parse(v.expires)>Date.now()?v:null}catch(e){return null}},
+    async login(password){
+      let r;try{r=await call("POST","/auth/organiser",{password})}catch(e){return{offline:true}}
+      if(r.status===200&&r.data&&r.data.token){try{localStorage.setItem(ORG,JSON.stringify(r.data))}catch(e){}return{ok:true}}
+      return {error:(r.data&&r.data.error)||`Something went wrong (${r.status})`};
+    },
+    logout(){try{localStorage.removeItem(ORG)}catch(e){}},
+    // kind "players"|"venues"; method PATCH|DELETE, or POST with suffix "/merge" → {item} | {error} | {offline}
+    async tidy(method,kind,id,body,suffix=""){
+      const o=this.organiser();if(!o)return{error:"organiser login needed",expired:true};
+      let r;try{r=await call(method,`/${kind}/${encodeURIComponent(id)}${suffix}`,body,o.token)}catch(e){return{offline:true}}
+      if(r.status===401){this.logout();return{error:"organiser login needed",expired:true}}
+      const one=kind.slice(0,-1);
+      return r.status===200&&r.data?{item:r.data[one],moved:r.data.moved}:{error:(r.data&&r.data.error)||`Something went wrong (${r.status})`};
     }
   };
 })();

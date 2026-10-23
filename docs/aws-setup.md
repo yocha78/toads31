@@ -44,6 +44,10 @@ The RoleArn is not a password, but keeping it as a secret keeps it out of the lo
 
 The next deploy to `test` creates the AWS stack `toads31-test` (a database table, the API and a health check), writes its address into the app's `config.js`, and checks that `/health` answers. The first deploy to `main` creates the `toads31` stack in the same way, after your approval.
 
+## Updating the role
+
+If the template changes, update the stack instead of creating a new one: **CloudFormation → Stacks → `toads31-github-access` → Update → Replace existing template → Upload a template file**, pick the new file, then **Next** through the pages, tick the acknowledgement and **Submit**. The RoleArn stays the same.
+
 ## What the role can do
 
 Only what deploying Toads 31 needs, in eu-west-2: manage the `toads31*` CloudFormation stacks, Lambda functions, DynamoDB tables, log groups and the IAM roles of those functions; API Gateway; the bucket SAM uses for uploads; and read `/toads31/*` parameters (the organiser password, later). Only the `test` and `live` deploy jobs of `yocha78/toads31` can use it.

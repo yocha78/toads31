@@ -8,6 +8,10 @@ Parameters:
   GitHubRepo:
     Type: String
     Default: yocha78/toads31
+  GitHubRepoWithIds:
+    Type: String
+    Default: yocha78@48156661/toads31@1430966158
+    Description: The same repository as GitHub names it in tokens that carry owner and repository IDs
   CreateOidcProvider:
     Type: String
     AllowedValues: ["yes", "no"]
@@ -45,6 +49,8 @@ Resources:
                 token.actions.githubusercontent.com:sub:
                   - !Sub repo:${GitHubRepo}:environment:test
                   - !Sub repo:${GitHubRepo}:environment:live
+                  - !Sub repo:${GitHubRepoWithIds}:environment:test
+                  - !Sub repo:${GitHubRepoWithIds}:environment:live
       Policies:
         - PolicyName: toads31-sam-deploy
           PolicyDocument:

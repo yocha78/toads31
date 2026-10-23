@@ -309,6 +309,7 @@ REQUIREMENTS.md      this file
 | `test` | `toads31-test` | `/toads31-test` |
 | `main` | `toads31` | `/toads31` |
 
+- The `main` deploy waits for manual approval in GitHub before anything goes live (see section 7, decision 8).
 - **Optional:** use the custom API address `api.brightonpubguide.co.uk`. It needs one DNS record in GoDaddy and a free AWS certificate.
 - **One-time setup by Lionel:**
   - Create the AWS account, budget alert and GitHub OIDC role (step-by-step instructions to be provided).
@@ -355,3 +356,8 @@ REQUIREMENTS.md      this file
 4. **Decided:** every game records the pub/venue (shared list, anyone can add).
 5. **Decided:** guest names are allowed. Their games are saved, but guests get no stats unless later linked to a registered player.
 6. **Decided:** when the player count is not a power of two, the organiser chooses between a **Qualifying round** and **Byes** (round 1 only, random). Built into the app on 22 Oct 2026; see section 3.1.
+7. **Decided (23 Oct 2026):** if the API cannot be reached, the app falls back to Phase 1 local mode so a game never stops.
+8. **Decided (23 Oct 2026):** deploys to live (`main` → `/toads31`) need manual approval in GitHub (a protected GitHub environment). Deploys to `test` run automatically.
+9. **Decided (23 Oct 2026):** use the default AWS API address for now; the custom `api.brightonpubguide.co.uk` address can come later.
+10. **Decided (23 Oct 2026):** live updates use polling every 3–5 s; WebSockets only if polling proves too slow.
+11. **Decided (23 Oct 2026):** players and win tallies already stored in phones' `localStorage` are not migrated. Players are registered fresh in the shared list.

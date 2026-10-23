@@ -6,6 +6,9 @@ import { listAll, add, update, remove, mergePlayers } from "./lib/directory.mjs"
 import { saveGame, getGame, recentGames } from "./lib/games.mjs";
 import { login, isOrganiser, parameterStorePassword } from "./lib/auth.mjs";
 import { playerStats } from "./lib/stats.mjs";
+import {
+  createTournament, getTournament, listTournaments, claimTable, releaseTable, playTable, endTournament, deleteTournament,
+} from "./lib/tournaments.mjs";
 
 const defaultDb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
@@ -41,16 +44,35 @@ export function makeHandler(db = defaultDb, table = process.env.TABLE_NAME, getP
     "POST /games": async e => {
       const body = readBody(e);
       if (!body) return json(400, { error: "body must be a JSON object" });
-      const r = await saveGame(db, table, body);
+      // Only the server links a game to a tournament
+      const r = await saveGame(db, table, { ...body, tournament: undefined });
       if (r.status === "invalid") return json(400, { error: r.error });
       return json(r.status === "created" ? 201 : 200, { game: r.game });
     },
     "GET /games": async () => json(200, { games: await recentGames(db, table) }),
+    "POST /tournaments": organiser(async e => {
+      const r = await createTournament(db, table, readBody(e));
+      return r.status === "invalid" ? json(400, { error: r.error }) : json(201, { tournament: r.tournament });
+    }),
+    "GET /tournaments": async () => json(200, { tournaments: await listTournaments(db, table) }),
+    "GET /tournaments/{id}": async e => {
+      const t = await getTournament(db, table, id(e), (e.queryStringParameters || {}).since);
+      return t ? json(200, t.same ? t : { tournament: t }) : json(404, { error: "no such tournament" });
+    },
+    "POST /tournaments/{id}/tables/{n}/claim": async e => reply(await claimTable(db, table, id(e), e.pathParameters.n, readBody(e))),
+    "POST /tournaments/{id}/tables/{n}/release": async e =>
+      reply(await releaseTable(db, table, id(e), e.pathParameters.n, readBody(e), await isOrganiser(getPassword, e))),
+    "POST /tournaments/{id}/tables/{n}/play": async e =>
+      reply(await playTable(db, table, id(e), e.pathParameters.n, readBody(e), await isOrganiser(getPassword, e))),
+    "POST /tournaments/{id}/end": organiser(async e => reply(await endTournament(db, table, id(e)))),
+    "DELETE /tournaments/{id}": organiser(async e =>
+      (await deleteTournament(db, table, id(e))) ? json(200, { deleted: true }) : json(404, { error: "no such tournament" })),
     "GET /games/{id}": async e => {
       const game = await getGame(db, table, (e.pathParameters || {}).id);
       return game ? json(200, { game }) : json(404, { error: "no such game" });
     },
   };
+  const reply = r => json(r.status, r.body);
   async function list(kind) {
     return json(200, { [kind]: await listAll(db, table, kind) });
   }

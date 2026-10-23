@@ -1,6 +1,6 @@
-// Just enough DynamoDB for the API tests: Query on PK, Get, BatchWrite, and all-or-nothing
-// TransactWrite with attribute_not_exists conditions
-import { QueryCommand, TransactWriteCommand, GetCommand, BatchWriteCommand, ScanCommand } from "@aws-sdk/lib-dynamodb";
+// Just enough DynamoDB for the API tests: Query on PK, Get, Put and Delete, BatchWrite, and all-or-nothing
+// TransactWrite with attribute_not_exists conditions. Put also knows the "ver = :v" condition.
+import { QueryCommand, TransactWriteCommand, GetCommand, BatchWriteCommand, ScanCommand, PutCommand, DeleteCommand } from "@aws-sdk/lib-dynamodb";
 
 export function fakeDb() {
   const rows = new Map(), k = (pk, sk) => pk + "\u0000" + sk;
@@ -11,14 +11,29 @@ export function fakeDb() {
       const i = cmd.input;
       this.calls.push(cmd.constructor.name);
       if (cmd instanceof QueryCommand) {
-        const pk = i.ExpressionAttributeValues[":pk"], sk = i.ExpressionAttributeValues[":sk"] || "";
-        return { Items: [...rows.values()].filter(r => r.PK === pk && r.SK.startsWith(sk)).sort((a, b) => a.SK.localeCompare(b.SK)).map(r => ({ ...r })) };
+        const v = i.ExpressionAttributeValues, pk = v[":pk"], sk = v[":sk"] || "", from = v[":from"] || "";
+        let items = [...rows.values()].filter(r => r.PK === pk && r.SK.startsWith(sk) && r.SK >= from).sort((a, b) => a.SK.localeCompare(b.SK));
+        if (i.ScanIndexForward === false) items.reverse();
+        if (i.Limit) items = items.slice(0, i.Limit);
+        return { Items: structuredClone(items) };
       }
       if (cmd instanceof ScanCommand) {
-        const sk = i.ExpressionAttributeValues[":m"];
-        return { Items: [...rows.values()].filter(r => r.SK === sk).map(r => ({ ...r })) };
+        const sk = i.ExpressionAttributeValues[":m"], pk = i.ExpressionAttributeValues[":g"] || "";
+        return { Items: [...rows.values()].filter(r => r.SK === sk && r.PK.startsWith(pk)).map(r => ({ ...r })) };
       }
-      if (cmd instanceof GetCommand) return { Item: rows.get(k(i.Key.PK, i.Key.SK)) };
+      if (cmd instanceof GetCommand) {
+        const r = rows.get(k(i.Key.PK, i.Key.SK));
+        return { Item: r && structuredClone(r) };
+      }
+      if (cmd instanceof PutCommand) {
+        const key = k(i.Item.PK, i.Item.SK), old = rows.get(key), c = i.ConditionExpression;
+        const ok = !c || (c === "attribute_not_exists(PK)" ? !old : c === "ver = :v" ? old && old.ver === i.ExpressionAttributeValues[":v"] : null);
+        if (ok === null) throw new Error("fake db: unsupported condition " + c);
+        if (!ok) { const e = new Error("Condition failed"); e.name = "ConditionalCheckFailedException"; throw e; }
+        rows.set(key, structuredClone(i.Item));
+        return {};
+      }
+      if (cmd instanceof DeleteCommand) { rows.delete(k(i.Key.PK, i.Key.SK)); return {}; }
       if (cmd instanceof BatchWriteCommand) {
         const [reqs] = Object.values(i.RequestItems);
         if (reqs.length > 25) throw new Error("fake db: more than 25 writes in a batch");

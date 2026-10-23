@@ -56,7 +56,14 @@ export function checkGame(input) {
   const won = rem.indexOf(0);
   if (won < 0) return { error: "the game is not finished" };
   const finished = time(g.finished) || new Date().toISOString();
-  return { game: { id: g.id, mode: g.mode, sides, members, venue, winner: sides[won], rounds: turns.at(-1).round, started: time(g.started), finished, turns } };
+  // A live tournament's game carries its tournament (set by the server, see tournaments.mjs)
+  let tournament = null;
+  if (g.tournament != null) {
+    const t = g.tournament, name = t && cleanName(t.name, 40);
+    if (!t || typeof t.id !== "string" || !/^[A-Z0-9]{6}$/.test(t.id) || !name) return { error: "tournament is not valid" };
+    tournament = { id: t.id, name };
+  }
+  return { game: { id: g.id, mode: g.mode, sides, members, venue, winner: sides[won], rounds: turns.at(-1).round, started: time(g.started), finished, turns, tournament } };
 }
 
 // Points and toads per person (the thrower), the same sums as the app's scoresheet
@@ -100,6 +107,7 @@ export async function saveGame(db, table, input, now = new Date()) {
     PK: `GAME#${g.id}`, SK: "META", id: g.id, mode: g.mode, sides: g.sides, members: g.members,
     venue: venue ? venue.name : g.venue, venueId: venue ? venue.id : null, winner: g.winner, rounds: g.rounds,
     turns: g.turns.length, players, started: g.started, finished: g.finished, saved: now.toISOString(),
+    ...(g.tournament ? { tournament: g.tournament } : {}),
   };
   const mine = players.filter(p => p.playerId).map(p => ({
     Put: {
@@ -107,7 +115,7 @@ export async function saveGame(db, table, input, now = new Date()) {
       Item: {
         PK: `PLAYER#${p.playerId}`, SK: `GAME#${g.finished}#${g.id}`, gameId: g.id, mode: g.mode, finished: g.finished,
         venue: meta.venue, venueId: meta.venueId, side: p.side, won: p.won, pts: p.pts, toads: p.toads, sides: g.sides.length,
-        rounds: g.rounds, winner: g.winner,
+        rounds: g.rounds, winner: g.winner, ...(g.tournament ? { tournament: g.tournament } : {}),
         // everyone on another side, for head-to-head records
         opponents: players.filter(o => o.side !== p.side).map(o => ({ name: o.name, playerId: o.playerId, won: o.won })),
       },
@@ -138,9 +146,21 @@ async function batchWrite(db, table, requests) {
   }
 }
 
-// The whole game, turns included, or null
-export async function getGame(db, table, id) {
-  if (typeof id !== "string" || !UUID.test(id)) return null;
+// Removes a saved game, its turns and the players' summaries (a live tournament's winning throw undone)
+export async function deleteGame(db, table, id) {
+  if (typeof id !== "string" || !UUID.test(id)) return false;
+  const items = await gameItems(db, table, id), meta = items.find(i => i.SK === "META");
+  if (!meta) return false;
+  const dels = [
+    ...(meta.players || []).filter(p => p.playerId).map(p => ({ PK: `PLAYER#${p.playerId}`, SK: `GAME#${meta.finished}#${id}` })),
+    ...items.filter(i => i.SK !== "META").map(i => ({ PK: i.PK, SK: i.SK })),
+    { PK: meta.PK, SK: "META" }, // last, so a half-done delete is still found next time
+  ].map(Key => ({ DeleteRequest: { Key } }));
+  for (let i = 0; i < dels.length; i += 25) await batchWrite(db, table, dels.slice(i, i + 25));
+  return true;
+}
+
+async function gameItems(db, table, id) {
   const items = [];
   let ExclusiveStartKey;
   do {
@@ -150,6 +170,13 @@ export async function getGame(db, table, id) {
     items.push(...(r.Items || []));
     ExclusiveStartKey = r.LastEvaluatedKey;
   } while (ExclusiveStartKey);
+  return items;
+}
+
+// The whole game, turns included, or null
+export async function getGame(db, table, id) {
+  if (typeof id !== "string" || !UUID.test(id)) return null;
+  const items = await gameItems(db, table, id);
   const meta = items.find(i => i.SK === "META");
   if (!meta) return null;
   const turns = items.filter(i => i.SK.startsWith("TURN#")).sort((a, b) => a.i - b.i).map(({ PK, SK, ...t }) => t);
@@ -158,13 +185,13 @@ export async function getGame(db, table, id) {
 
 // The latest saved games, newest first, for checking what arrived. It reads the whole table,
 // which is fine at pub scale; the stats in step 6 read each player's own summaries instead.
-const FIELDS = ["id", "mode", "venue", "winner", "sides", "turns", "finished", "saved"];
+const FIELDS = ["id", "mode", "venue", "winner", "sides", "turns", "finished", "saved", "tournament"];
 export async function recentGames(db, table, limit = 20) {
   const items = [];
   let ExclusiveStartKey;
   do {
     const r = await db.send(new ScanCommand({
-      TableName: table, FilterExpression: "SK = :m", ExpressionAttributeValues: { ":m": "META" }, ExclusiveStartKey,
+      TableName: table, FilterExpression: "SK = :m AND begins_with(PK, :g)", ExpressionAttributeValues: { ":m": "META", ":g": "GAME#" }, ExclusiveStartKey,
       // Names go through placeholders, since some (like "mode") may be DynamoDB reserved words
       ProjectionExpression: FIELDS.map((_, n) => "#f" + n).join(", "),
       ExpressionAttributeNames: Object.fromEntries(FIELDS.map((f, n) => ["#f" + n, f])),

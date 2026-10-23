@@ -132,6 +132,30 @@ Resources:
         GetGame:
           Type: HttpApi
           Properties: {ApiId: !Ref Api, Path: "/games/{id}", Method: GET}
+        CreateTournament:
+          Type: HttpApi
+          Properties: {ApiId: !Ref Api, Path: /tournaments, Method: POST}
+        ListTournaments:
+          Type: HttpApi
+          Properties: {ApiId: !Ref Api, Path: /tournaments, Method: GET}
+        GetTournament:
+          Type: HttpApi
+          Properties: {ApiId: !Ref Api, Path: "/tournaments/{id}", Method: GET}
+        DeleteTournament:
+          Type: HttpApi
+          Properties: {ApiId: !Ref Api, Path: "/tournaments/{id}", Method: DELETE}
+        EndTournament:
+          Type: HttpApi
+          Properties: {ApiId: !Ref Api, Path: "/tournaments/{id}/end", Method: POST}
+        ClaimTable:
+          Type: HttpApi
+          Properties: {ApiId: !Ref Api, Path: "/tournaments/{id}/tables/{n}/claim", Method: POST}
+        ReleaseTable:
+          Type: HttpApi
+          Properties: {ApiId: !Ref Api, Path: "/tournaments/{id}/tables/{n}/release", Method: POST}
+        PlayTable:
+          Type: HttpApi
+          Properties: {ApiId: !Ref Api, Path: "/tournaments/{id}/tables/{n}/play", Method: POST}
 
   ApiLogs:
     Type: AWS::Logs::LogGroup

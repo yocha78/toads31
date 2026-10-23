@@ -334,6 +334,7 @@ REQUIREMENTS.md      this file
 - **No cPanel.** File access is by **SFTP** only. The host, username and password are in the GoDaddy dashboard, under the site's settings (look for "SFTP/SSH" or "Server"). The port is usually 22.
 - **Upload location:** the site's root folder, the one that contains `wp-admin`, `wp-content` and `wp-config.php`. The app goes into `toads31/` (and `toads31-test/`) inside it. Confirm the exact root path on first connection (it is often shown as `/html` or the site's home folder).
 - **Store as GitHub secrets:** `SFTP_HOST`, `SFTP_USER`, `SFTP_PASSWORD`, `SFTP_PORT` and `SFTP_ROOT_PATH`.
+- **Built (Oct 2026): the page updates itself.** Each deploy writes `version.json` with its build number and stamps the same number into `index.html`. On opening, the page fetches `version.json` fresh; if it names a newer build than the page, the page reloads once as `?v=<build>`, an address no cache has stored, so nobody needs to add `?v=` by hand. An `.htaccess` also asks caches to revalidate HTML and JSON.
 - **Caching:** Managed WordPress has a server cache and CDN. After each deploy:
   - flush the cache from the GoDaddy dashboard;
   - give the app's own files cache-busting names or query strings, e.g. `app.js?v=<build>`, so phones fetch the new version;

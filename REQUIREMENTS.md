@@ -316,7 +316,7 @@ REQUIREMENTS.md      this file
   3. Merge `test` into `main`. The tests run again, and the upload to `/toads31` waits for approval under the repository's Actions tab.
   4. After the upload, flush the GoDaddy cache if the page still shows the old version label.
 - Each deploy gives the CSS and JS links a new `?v=<run>-<commit>` so phones fetch the new files. Files are uploaded with scripts first and `index.html` last. Only `toads31/` or `toads31-test/` is written and nothing is deleted.
-- Other branches only do a dry run (list what would be uploaded). A manual "SFTP check" workflow lists the server's root folder to test the secrets.
+- Started by hand from the Actions tab, the deploy defaults to a dry run (list what would be uploaded), and on any branch other than `test` or `main` it is always a dry run. A manual "SFTP check" workflow lists the server's root folder to test the secrets.
 - `SFTP_ROOT_PATH` is `html`: the SFTP login opens in the home folder, and `html` inside it holds WordPress.
 - **Optional:** use the custom API address `api.brightonpubguide.co.uk`. It needs one DNS record in GoDaddy and a free AWS certificate.
 - **One-time setup by Lionel:**

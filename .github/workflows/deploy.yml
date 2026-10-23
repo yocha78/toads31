@@ -5,7 +5,7 @@ name: Deploy
 # Only the toads31* folders are written. WordPress is never touched, and nothing on the server is deleted.
 on:
   push:
-    branches: [test, main, claude/project-thread-elaiuv]
+    branches: [test, main]
   workflow_dispatch:
     inputs:
       dry_run:
@@ -35,7 +35,7 @@ jobs:
       url: https://brightonpubguide.co.uk/${{ github.ref_name == 'main' && 'toads31' || 'toads31-test' }}/
     env:
       FOLDER: ${{ github.ref_name == 'main' && 'toads31' || 'toads31-test' }}
-      # Branches other than test and main only ever do a dry run
+      # Runs started by hand on another branch only ever do a dry run
       DRY_RUN: ${{ (github.ref_name != 'test' && github.ref_name != 'main') || inputs.dry_run == true }}
     steps:
       - uses: actions/checkout@v5

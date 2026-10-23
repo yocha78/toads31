@@ -112,6 +112,17 @@ test("games that don't add up are refused and nothing is saved", async () => {
   assert.equal(db.rows.size, 0);
 });
 
+test("the latest games are listed newest first", async () => {
+  const h = makeHandler(fakeDb(), "T");
+  const a = record(singleGame(), { finished: Date.now() - 60000 }), b = record(singleGame(), { venue: "The Swan" });
+  await call(h, "POST /games", a);
+  await call(h, "POST /games", b);
+  const r = await call(h, "GET /games");
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body.games.map(g => g.id), [b.id, a.id]);
+  assert.equal(r.body.games[0].venue, "The Swan");
+});
+
 test("unknown game ids are 404", async () => {
   const h = makeHandler(fakeDb(), "T");
   assert.equal((await call(h, "GET /games/{id}", undefined, { id: uuid() })).status, 404);

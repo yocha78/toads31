@@ -3,7 +3,7 @@ import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { json, readBody } from "./lib/http.mjs";
 import { listAll, add } from "./lib/directory.mjs";
-import { saveGame, getGame } from "./lib/games.mjs";
+import { saveGame, getGame, recentGames } from "./lib/games.mjs";
 
 const defaultDb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
@@ -20,6 +20,7 @@ export function makeHandler(db = defaultDb, table = process.env.TABLE_NAME) {
       if (r.status === "invalid") return json(400, { error: r.error });
       return json(r.status === "created" ? 201 : 200, { game: r.game });
     },
+    "GET /games": async () => json(200, { games: await recentGames(db, table) }),
     "GET /games/{id}": async e => {
       const game = await getGame(db, table, (e.pathParameters || {}).id);
       return game ? json(200, { game }) : json(404, { error: "no such game" });

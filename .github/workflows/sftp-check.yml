@@ -1,0 +1,38 @@
+name: SFTP check
+
+# Read-only: connects to GoDaddy with the SFTP secrets and lists the root folder. Uploads nothing.
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/project-thread-elaiuv]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the secrets are set
+        env:
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+          SFTP_USER: ${{ secrets.SFTP_USER }}
+          SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
+          SFTP_PORT: ${{ secrets.SFTP_PORT }}
+          SFTP_ROOT_PATH: ${{ secrets.SFTP_ROOT_PATH }}
+        run: |
+          missing=0
+          for v in SFTP_HOST SFTP_USER SFTP_PASSWORD SFTP_PORT SFTP_ROOT_PATH; do
+            if [ -z "${!v}" ]; then echo "::error::$v is not set"; missing=1; else echo "$v is set"; fi
+          done
+          exit $missing
+      - name: List the root folder
+        env:
+          SSHPASS: ${{ secrets.SFTP_PASSWORD }}
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+          SFTP_USER: ${{ secrets.SFTP_USER }}
+          SFTP_PORT: ${{ secrets.SFTP_PORT }}
+          SFTP_ROOT_PATH: ${{ secrets.SFTP_ROOT_PATH }}
+        run: |
+          sudo apt-get install -y -qq sshpass >/dev/null
+          printf 'pwd\ncd %s\npwd\nls -1\n' "$SFTP_ROOT_PATH" > batch
+          sshpass -e sftp -oBatchMode=no -oStrictHostKeyChecking=accept-new -P "${SFTP_PORT:-22}" -b batch "$SFTP_USER@$SFTP_HOST" | tee out.txt
+          grep -q 'wp-config.php' out.txt && echo "OK: wp-config.php found in the root path" || { echo "::error::wp-config.php not found in SFTP_ROOT_PATH"; exit 1; }
+          grep -qx 'toads31' out.txt && echo "OK: toads31 folder found" || echo "::warning::no toads31 folder in the root path"

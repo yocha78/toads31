@@ -86,6 +86,9 @@ Resources:
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref Table
+        # the organiser password: /toads31/<stage>/organiser-password (a SecureString)
+        - SSMParameterReadPolicy:
+            ParameterName: !Sub toads31/${Stage}/*
       Events:
         ListPlayers:
           Type: HttpApi
@@ -105,6 +108,27 @@ Resources:
         ListGames:
           Type: HttpApi
           Properties: {ApiId: !Ref Api, Path: /games, Method: GET}
+        OrganiserLogin:
+          Type: HttpApi
+          Properties: {ApiId: !Ref Api, Path: /auth/organiser, Method: POST}
+        PlayerStats:
+          Type: HttpApi
+          Properties: {ApiId: !Ref Api, Path: "/players/{id}/stats", Method: GET}
+        UpdatePlayer:
+          Type: HttpApi
+          Properties: {ApiId: !Ref Api, Path: "/players/{id}", Method: PATCH}
+        DeletePlayer:
+          Type: HttpApi
+          Properties: {ApiId: !Ref Api, Path: "/players/{id}", Method: DELETE}
+        MergePlayer:
+          Type: HttpApi
+          Properties: {ApiId: !Ref Api, Path: "/players/{id}/merge", Method: POST}
+        UpdateVenue:
+          Type: HttpApi
+          Properties: {ApiId: !Ref Api, Path: "/venues/{id}", Method: PATCH}
+        DeleteVenue:
+          Type: HttpApi
+          Properties: {ApiId: !Ref Api, Path: "/venues/{id}", Method: DELETE}
         GetGame:
           Type: HttpApi
           Properties: {ApiId: !Ref Api, Path: "/games/{id}", Method: GET}

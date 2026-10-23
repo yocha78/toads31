@@ -89,6 +89,55 @@
     </div>
     <button class="ghost" id="shuffleBtn" hidden>Shuffle the draw</button>
     <button class="primary big" id="startBtn" disabled>Start game</button>
+    <button class="ghost" id="statsBtn" hidden>Players &amp; stats</button>
+  </section>
+
+  <!-- PLAYERS & STATS (online only) -->
+  <section id="playersView" class="panel" hidden>
+    <div class="viewhead"><h2>Players</h2><button class="ghost" id="playersBack">Back</button></div>
+    <p class="hint" id="playersHint"></p>
+    <div class="chips" id="dirList"></div>
+    <div class="orgbox" id="orgBox">
+      <h2>Organiser</h2>
+      <form class="row" id="orgLogin">
+        <input type="password" id="orgPassword" placeholder="Organiser password" autocomplete="current-password" aria-label="Organiser password">
+        <button class="primary" type="submit">Log in</button>
+      </form>
+      <div class="orgon" id="orgOn" hidden>
+        <p class="hint">Logged in as organiser on this phone. Open a player to rename, merge or delete them.</p>
+        <h2>Venues</h2>
+        <ul class="players" id="venueAdmin"></ul>
+        <button class="ghost" id="orgLogout">Log out</button>
+      </div>
+      <p class="msg" id="orgMsg" aria-live="polite"></p>
+    </div>
+    <p class="hint">What's saved: player names, pubs, and the scores of finished games. Nothing else about you. The organiser can delete a player and their stats.</p>
+  </section>
+
+  <section id="statsView" class="panel" hidden>
+    <div class="viewhead"><h2>Player stats</h2><button class="ghost" id="statsBack">All players</button></div>
+    <div class="who" id="statsName"></div>
+    <label class="hint" for="statsVenue">Pub</label>
+    <select id="statsVenue"></select>
+    <p class="msg" id="statsMsg" aria-live="polite"></p>
+    <div id="statsBody"></div>
+    <div class="orgbox" id="statsOrg" hidden>
+      <h2>Organiser</h2>
+      <form class="row" id="renameForm">
+        <input type="text" id="renameInput" maxlength="24" autocomplete="off" aria-label="New name">
+        <button type="submit">Rename</button>
+      </form>
+      <div class="row">
+        <select id="mergeInto" aria-label="Merge into"></select>
+        <button id="mergeBtn">Merge</button>
+      </div>
+      <p class="hint">Merge moves this player's games to the chosen player, then removes this one. Use it for duplicates like "Dave" and "Dave B".</p>
+      <button class="ghost" id="deletePlayerBtn">Delete this player</button>
+      <div class="confirm" id="statsConfirm" hidden>
+        <span id="statsConfirmText"></span>
+        <div class="actions"><button id="statsConfirmNo">Cancel</button><button class="primary" id="statsConfirmYes">Yes</button></div>
+      </div>
+    </div>
   </section>
 
   <!-- THROWING ORDER -->
@@ -179,7 +228,7 @@
     <button class="ghost" id="undoWinBtn">Undo winning throw</button>
   </section>
   <p class="hint" id="syncNote" style="text-align:center" aria-live="polite" hidden></p>
-  <p class="hint" style="text-align:center">Version 23 Oct 2026 · Saved games</p>
+  <p class="hint" style="text-align:center">Version 23 Oct 2026 · Player stats</p>
 </div>
 
 <script src="config.js?v=20261023"></script>

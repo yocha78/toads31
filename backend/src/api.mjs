@@ -2,13 +2,38 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { json, readBody } from "./lib/http.mjs";
-import { listAll, add } from "./lib/directory.mjs";
+import { listAll, add, update, remove, mergePlayers } from "./lib/directory.mjs";
 import { saveGame, getGame, recentGames } from "./lib/games.mjs";
+import { login, isOrganiser, parameterStorePassword } from "./lib/auth.mjs";
+import { playerStats } from "./lib/stats.mjs";
 
 const defaultDb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
-export function makeHandler(db = defaultDb, table = process.env.TABLE_NAME) {
+export function makeHandler(db = defaultDb, table = process.env.TABLE_NAME, getPassword = parameterStorePassword()) {
+  const ONE = { players: "player", venues: "venue" };
+  const id = e => (e.pathParameters || {}).id;
+  // Organiser-only routes answer 401 without a valid token
+  const organiser = fn => async e => ((await isOrganiser(getPassword, e)) ? fn(e) : json(401, { error: "organiser login needed" }));
+  const housekeeping = (kind, r) =>
+    r.status === "missing" ? json(404, { error: `no such ${ONE[kind]}` })
+    : r.status === "invalid" ? json(400, { error: r.error })
+    : r.status === "exists" ? json(409, { error: "that name is already taken", [ONE[kind]]: r.item })
+    : json(200, { [ONE[kind]]: r.item, ...(r.moved != null ? { moved: r.moved } : {}) });
   const routes = {
+    "POST /auth/organiser": async e => {
+      const r = await login(getPassword, readBody(e));
+      return r.token ? json(200, r) : json(r.status, { error: r.error });
+    },
+    "GET /players/{id}/stats": async e => {
+      const venue = (e.queryStringParameters || {}).venue || null;
+      const stats = await playerStats(db, table, id(e), venue);
+      return stats ? json(200, stats) : json(404, { error: "no such player" });
+    },
+    "PATCH /players/{id}": organiser(async e => housekeeping("players", await update(db, table, "players", id(e), readBody(e) || {}))),
+    "DELETE /players/{id}": organiser(async e => housekeeping("players", await remove(db, table, "players", id(e)))),
+    "POST /players/{id}/merge": organiser(async e => housekeeping("players", await mergePlayers(db, table, id(e), (readBody(e) || {}).into))),
+    "PATCH /venues/{id}": organiser(async e => housekeeping("venues", await update(db, table, "venues", id(e), readBody(e) || {}))),
+    "DELETE /venues/{id}": organiser(async e => housekeeping("venues", await remove(db, table, "venues", id(e)))),
     "GET /players": () => list("players"),
     "POST /players": e => create("players", e),
     "GET /venues": () => list("venues"),

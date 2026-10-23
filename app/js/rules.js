@@ -170,6 +170,69 @@ function undoGameWin(tour,m,name){
   m.winner=null;if(name===m.a)m.wa--;else m.wb--;if(m.games)m.games.pop();settle(tour);
 }
 
+/* ---------- live tournaments (Phase 2) ---------- */
+// One change to a table's match, applied the same way on the scoring phone and on the server.
+//   {t:"start", ri, mi, gameId, order, at}            a new game, players in throwing order
+//   {t:"turn", ri, mi, gameId, expect, id, s, used, at} expect = turns already played, id = the phone's turn id
+//   {t:"undo"|"undoWin", ri, mi, gameId, expect, id}   expect = turns played, id = the last turn's id
+// → {ok:true, turn?, finished?:{winner}, undone?:true} | {ok:true, dup:true} (already applied)
+//   | {ask:[…]} (how many toads? nothing applied) | {error, conflict?:true}
+const matchOf=(tour,ri,mi)=>Number.isInteger(ri)&&Number.isInteger(mi)?(ri<0?(tour.quali||{matches:[]}).matches[mi]:(tour.rounds[ri]||[])[mi])||null:null;
+// Matches that lost their players (an undone result) give their table back unless a game started there
+function freeTables(tour){for(const {m} of allMatches(tour))if(m.table!=null&&!m.winner&&!ready(m)&&!m.game)m.table=null}
+function applyOp(tour,table,op){
+  const m=matchOf(tour,op&&op.ri,op&&op.mi);
+  if(!m)return {error:"no such match"};
+  if(m.table!==table)return {error:"that match is not on this table",conflict:true};
+  const g=m.game, has=id=>g.hist.some(h=>h.id===id);
+  if(op.t==="start"){
+    if(g&&g.id===op.gameId)return {ok:true,dup:true};
+    if(!ready(m))return {error:"this match is not ready",conflict:true};
+    if(g&&!g.done)return {error:"a game is already being played here",conflict:true};
+    const o=op.order;
+    if(!Array.isArray(o)||o.length!==2||!o.includes(m.a)||!o.includes(m.b)||o[0]===o[1])return {error:"the order must list the match's two players"};
+    m.game=Object.assign(newG(o.slice()),{id:op.gameId,started:op.at||null});
+    return {ok:true};
+  }
+  if(!g||g.id!==op.gameId)return {error:"that game is not on this table",conflict:true};
+  if(op.t==="turn"){
+    const old=g.hist[op.expect];
+    if(old&&old.id===op.id)return {ok:true,dup:true};
+    if(g.done||g.hist.length!==op.expect)return {error:"the scores have moved on",conflict:true};
+    const left=g.rem[g.cur], c=coinsFor(g.hist.length,left);
+    if(!Number.isInteger(op.s)||op.s<0||op.s>2*c)return {error:"that score is not possible"};
+    if(op.used!=null&&!(op.s===left&&finishChoices(op.s,c).includes(op.used)))return {error:"that number of toads is not possible"};
+    const t=playTurn(g,op.s,op.used==null?undefined:op.used);
+    if(t.ask)return {ask:t.ask};
+    Object.assign(g.hist[g.hist.length-1],{id:op.id,at:op.at||null});
+    if(!t.won)return {ok:true,turn:t};
+    g.done=true;recordGameWin(tour,m,g,g.gp[t.p]);assignTables(tour);
+    return {ok:true,turn:t,finished:{winner:g.gp[t.p]}};
+  }
+  if(op.t==="undo"||op.t==="undoWin"){
+    const win=op.t==="undoWin";
+    if(!g.done&&g.hist.length===op.expect-1&&!has(op.id))return {ok:true,dup:true};
+    const last=g.hist[g.hist.length-1];
+    if(g.done!==win||g.hist.length!==op.expect||!last||last.id!==op.id)return {error:"the scores have moved on",conflict:true};
+    if(win){
+      // Only while nothing has been played on the back of this result
+      const after=allMatches(tour).filter(x=>x.m!==m&&x.m.game&&(x.m.table===m.table&&!x.m.winner||feedsFrom(tour,x,op.ri,op.mi,m)));
+      if(after.length)return {error:"a game has already started on the back of this result",conflict:true};
+      for(const {m:x} of allMatches(tour))if(x!==m&&x.table===m.table&&!x.winner)x.table=null;
+      undoGameWin(tour,m,g.gp[g.rem.indexOf(0)]);g.done=false;
+    }
+    undoTurn(g);freeTables(tour);assignTables(tour);
+    return {ok:true,undone:true};
+  }
+  return {error:"unknown change"};
+}
+// Does match x take a player from the result of match m (at ri, mi)?
+function feedsFrom(tour,x,ri,mi,m){
+  if(!m.winner)return false;
+  if(ri<0)return x.ri===0;
+  return x.ri===ri+1&&x.mi===Math.floor(mi/2);
+}
+
 /* ---------- saving (Phase 2) ---------- */
 // A finished Single or Duo game as the API's POST /games takes it. info: {id, mode, venue, started, finished}
 function gameRecord(g,info){
@@ -179,6 +242,6 @@ function gameRecord(g,info){
 }
 
 const Toads={TARGET,TO_WIN,coinsFor,keypad,finishChoices,newG,throwerOf,playTurn,undoTurn,sideStats,playerStats,
-  mk,knockSize,seedOrder,buildTour,standings,qualiDone,settle,allMatches,ready,assignTables,roundName,gameNo,recordGameWin,undoGameWin,gameRecord};
+  mk,knockSize,seedOrder,buildTour,standings,qualiDone,settle,allMatches,ready,assignTables,roundName,gameNo,recordGameWin,undoGameWin,matchOf,applyOp,gameRecord};
 if(typeof module!=="undefined"&&module.exports)module.exports=Toads;else root.Toads=Toads;
 })(this);

@@ -234,3 +234,24 @@ table.st td.n,table.st th.n{text-align:right}
 #statsBody{display:flex;flex-direction:column;gap:10px}
 #statsBody p{margin:0}
 #statsMsg:empty,#orgMsg:empty{display:none}
+
+/* live tournaments */
+.livebox{display:flex;flex-direction:column;gap:8px}
+.livebox .players li .pname{flex:1;min-width:0}
+.check{display:flex;gap:10px;align-items:flex-start;line-height:1.35}
+.check input{width:20px;height:20px;margin:1px 0 0;flex:none;accent-color:var(--brass)}
+.livefields{display:flex;flex-direction:column;gap:8px}
+.livefields input,.pinform input{font:inherit;padding:12px 14px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);min-width:0}
+.pinform{display:flex;flex-direction:column;gap:6px}
+.pinform input{flex:1}
+.livepanel{display:flex;flex-direction:column;gap:6px}
+.livepanel h2{overflow-wrap:anywhere}
+.livepanel .hint{margin:0}
+#liveNote:empty,#liveMsg:empty,#liveSync:empty{display:none}
+#liveSync.bad{color:var(--bad);font-weight:700}
+.sharebox{display:flex;flex-direction:column;gap:8px;align-items:center}
+.sharebox .row{width:100%}
+.qr{width:200px;max-width:70vw;background:#fff;border-radius:8px;line-height:0}
+.qr svg{width:100%;height:auto}
+.tclaim{grid-column:1 / -1;display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;font-size:.78rem;color:var(--muted);margin-top:4px}
+.tclaim .link{border:0;background:none;padding:2px 0;color:var(--ink);text-decoration:underline;font-size:.78rem}

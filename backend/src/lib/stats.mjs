@@ -45,10 +45,18 @@ export async function playerStats(db, table, id, venueId) {
       h2h.set(key, r);
     }
   }
+  // Live tournaments played: their games here, newest first
+  const tours = new Map();
+  for (const g of games) {
+    if (!g.tournament) continue;
+    const t = tours.get(g.tournament.id) || { id: g.tournament.id, name: g.tournament.name, venue: g.venue || null, last: g.finished, played: 0, won: 0 };
+    t.played++; if (g.won) t.won++;
+    tours.set(t.id, t);
+  }
   const view = g => ({
     gameId: g.gameId, finished: g.finished, mode: g.mode, venue: g.venue || null, venueId: g.venueId || null,
     won: g.won, pts: g.pts, toads: g.toads, avg: avg(g.pts, g.toads), sides: g.sides, rounds: g.rounds || null,
-    side: g.side, winner: g.winner || null, opponents: (g.opponents || []).map(o => o.name),
+    side: g.side, winner: g.winner || null, opponents: (g.opponents || []).map(o => o.name), tournament: g.tournament ? g.tournament.name : null,
   });
   return {
     player: { id, name: p.Item.name, created: p.Item.created },
@@ -57,6 +65,7 @@ export async function playerStats(db, table, id, venueId) {
     totals: sum(games),
     months: [...byMonth.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([month, list]) => ({ month, ...sum(list) })),
     best: best ? view(best) : null,
+    tournaments: [...tours.values()],
     headToHead: [...h2h.values()].sort((a, b) => b.played - a.played || a.name.localeCompare(b.name)),
     recent: games.slice(0, 10).map(view),
   };

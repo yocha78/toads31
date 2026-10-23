@@ -76,6 +76,14 @@ window.ToadsApi=(()=>{
       return {error:(r.data&&r.data.error)||`Something went wrong (${r.status})`};
     },
     logout(){try{localStorage.removeItem(ORG)}catch(e){}},
+    /* Live tournaments → the API's reply as {status, data}, or {offline:true} */
+    async tour(method,path,body,asOrganiser){
+      const o=asOrganiser?this.organiser():null;
+      if(asOrganiser==="required"&&!o)return{status:401,data:{error:"organiser login needed"},expired:true};
+      let r;try{r=await call(method,"/tournaments"+path,body,o&&o.token)}catch(e){return{offline:true}}
+      if(r.status===401&&o){this.logout();r.expired=true}
+      return r;
+    },
     // kind "players"|"venues"; method PATCH|DELETE, or POST with suffix "/merge" → {item} | {error} | {offline}
     async tidy(method,kind,id,body,suffix=""){
       const o=this.organiser();if(!o)return{error:"organiser login needed",expired:true};

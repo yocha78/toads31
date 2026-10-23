@@ -1,0 +1,90 @@
+name: Deploy
+
+# test branch -> /toads31-test (automatic)
+# main branch -> /toads31 (waits for approval in the "live" environment)
+# Only the toads31* folders are written. WordPress is never touched, and nothing on the server is deleted.
+on:
+  push:
+    branches: [test, main]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Only list what would be uploaded"
+        type: boolean
+        default: true
+
+concurrency:
+  group: deploy-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: npm test
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.ref_name == 'main' && 'live' || 'test' }}
+      url: https://brightonpubguide.co.uk/${{ github.ref_name == 'main' && 'toads31' || 'toads31-test' }}/
+    env:
+      FOLDER: ${{ github.ref_name == 'main' && 'toads31' || 'toads31-test' }}
+      # Runs started by hand on another branch only ever do a dry run
+      DRY_RUN: ${{ (github.ref_name != 'test' && github.ref_name != 'main') || inputs.dry_run == true }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build
+        run: |
+          rm -rf dist && cp -r app dist
+          # Cache busting: every deploy gets its own ?v= on the CSS and JS links
+          BUILD="${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}"
+          sed -i -E "s/\?v=[0-9A-Za-z-]+/?v=${BUILD}/g" dist/index.html
+          echo "BUILD=$BUILD" >> "$GITHUB_ENV"
+          grep -o '?v=[^"]*' dist/index.html
+
+      - name: Upload over SFTP
+        env:
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+          SFTP_USER: ${{ secrets.SFTP_USER }}
+          LFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
+          SFTP_PORT: ${{ secrets.SFTP_PORT }}
+          SFTP_ROOT_PATH: ${{ secrets.SFTP_ROOT_PATH }}
+        run: |
+          trim() { printf '%s' "$1" | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'; }
+          SFTP_HOST=$(trim "$SFTP_HOST"); SFTP_USER=$(trim "$SFTP_USER"); SFTP_PORT=$(trim "${SFTP_PORT:-22}"); SFTP_ROOT_PATH=$(trim "$SFTP_ROOT_PATH")
+          LFTP_PASSWORD=$(printf '%s' "$LFTP_PASSWORD" | tr -d '\r\n'); export LFTP_PASSWORD
+          case "$FOLDER" in toads31|toads31-test) ;; *) echo "::error::refusing to deploy to $FOLDER"; exit 1;; esac
+          TARGET="${SFTP_ROOT_PATH%/}/$FOLDER"
+          sudo apt-get install -y -qq lftp >/dev/null
+          if [ "$DRY_RUN" = "true" ]; then DRY="--dry-run"; PUT_INDEX="echo would upload index.html"; echo "Dry run: nothing will be uploaded"
+          else DRY=""; PUT_INDEX="put dist/index.html"; fi
+          # CSS and JS go up first and index.html last, so a phone never loads a new page with old scripts
+          cat > upload.lftp <<LFTP
+          set sftp:auto-confirm yes
+          set net:max-retries 3
+          set net:timeout 30
+          open --env-password -u "$SFTP_USER" -p $SFTP_PORT sftp://$SFTP_HOST
+          cd "$TARGET"
+          mirror -R --verbose $DRY --exclude-glob index.html dist/ ./
+          $PUT_INDEX
+          cls -l
+          LFTP
+          lftp -f upload.lftp
+
+      - name: Check the page
+        if: env.DRY_RUN != 'true'
+        run: |
+          URL="https://brightonpubguide.co.uk/$FOLDER/?nocache=$BUILD"
+          sleep 5
+          if curl -fsSL "$URL" | grep -q "?v=$BUILD"; then
+            echo "OK: $URL serves build $BUILD"
+          else
+            echo "::warning::$URL does not show build $BUILD yet. Flush the GoDaddy cache and check again."
+          fi

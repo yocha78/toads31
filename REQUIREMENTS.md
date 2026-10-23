@@ -177,7 +177,7 @@ A static app in `app/` with no back end: `index.html`, `css/app.css`, `js/rules.
 - **Version label:** a small label at the bottom, e.g. "Version 22 Oct 2026 · Next to come". Update it on every release so the live version can be checked at a glance.
 
 ### 3.6 Hosting today
-- The contents of `app/` (`index.html` plus the `css/` and `js/` folders) are uploaded by hand into `public_html/toads31/` on GoDaddy, until the Phase 2 deploy workflow takes over. It sits next to WordPress; real folders bypass WordPress routing.
+- The contents of `app/` (`index.html` plus the `css/` and `js/` folders) are uploaded by hand into `public_html/toads31/` on GoDaddy, until the Phase 2 deploy workflow takes over (see section 5.3). It sits next to WordPress; real folders bypass WordPress routing.
 - **Known pitfalls:**
   - Downloaded copies get renamed (e.g. `index (3).html`).
   - Server or browser caching.
@@ -309,7 +309,15 @@ REQUIREMENTS.md      this file
 | `test` | `toads31-test` | `/toads31-test` |
 | `main` | `toads31` | `/toads31` |
 
-- The `main` deploy waits for manual approval in GitHub before anything goes live (see section 7, decision 8).
+- The `main` deploy waits for manual approval in GitHub before anything goes live (see section 7, decision 8). The approval is a required reviewer on the GitHub environment `live`.
+- **Release routine** (`.github/workflows/deploy.yml`, built 23 Oct 2026):
+  1. Changes are merged into `test`. The rule tests run, then the app is uploaded to `/toads31-test` automatically.
+  2. Check `/toads31-test` on a phone.
+  3. Merge `test` into `main`. The tests run again, and the upload to `/toads31` waits for approval under the repository's Actions tab.
+  4. After the upload, flush the GoDaddy cache if the page still shows the old version label.
+- Each deploy gives the CSS and JS links a new `?v=<run>-<commit>` so phones fetch the new files. Files are uploaded with scripts first and `index.html` last. Only `toads31/` or `toads31-test/` is written and nothing is deleted.
+- Other branches only do a dry run (list what would be uploaded). A manual "SFTP check" workflow lists the server's root folder to test the secrets.
+- `SFTP_ROOT_PATH` is `html`: the SFTP login opens in the home folder, and `html` inside it holds WordPress.
 - **Optional:** use the custom API address `api.brightonpubguide.co.uk`. It needs one DNS record in GoDaddy and a free AWS certificate.
 - **One-time setup by Lionel:**
   - Create the AWS account, budget alert and GitHub OIDC role (step-by-step instructions to be provided).

@@ -4,7 +4,7 @@
 //   PK=GAME#<id>      SK=TURN#0001…               → one turn each
 //   PK=PLAYER#<pid>   SK=GAME#<finished>#<id>     → that registered player's summary, for stats later
 // META is written last, in the same transaction as the summaries, so a game with META is complete.
-import { QueryCommand, TransactWriteCommand, GetCommand, BatchWriteCommand } from "@aws-sdk/lib-dynamodb";
+import { QueryCommand, TransactWriteCommand, GetCommand, BatchWriteCommand, ScanCommand } from "@aws-sdk/lib-dynamodb";
 import { cleanName, nameKey } from "./http.mjs";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -151,6 +151,25 @@ export async function getGame(db, table, id) {
   if (!meta) return null;
   const turns = items.filter(i => i.SK.startsWith("TURN#")).sort((a, b) => a.i - b.i).map(({ PK, SK, ...t }) => t);
   return { ...summary(meta), turns };
+}
+
+// The latest saved games, newest first, for checking what arrived. It reads the whole table,
+// which is fine at pub scale; the stats in step 6 read each player's own summaries instead.
+const FIELDS = ["id", "mode", "venue", "winner", "sides", "turns", "finished", "saved"];
+export async function recentGames(db, table, limit = 20) {
+  const items = [];
+  let ExclusiveStartKey;
+  do {
+    const r = await db.send(new ScanCommand({
+      TableName: table, FilterExpression: "SK = :m", ExpressionAttributeValues: { ":m": "META" }, ExclusiveStartKey,
+      // Names go through placeholders, since some (like "mode") may be DynamoDB reserved words
+      ProjectionExpression: FIELDS.map((_, n) => "#f" + n).join(", "),
+      ExpressionAttributeNames: Object.fromEntries(FIELDS.map((f, n) => ["#f" + n, f])),
+    }));
+    items.push(...(r.Items || []));
+    ExclusiveStartKey = r.LastEvaluatedKey;
+  } while (ExclusiveStartKey);
+  return items.sort((a, b) => (b.finished || "").localeCompare(a.finished || "")).slice(0, limit);
 }
 
 function summary(m) {

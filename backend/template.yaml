@@ -102,6 +102,9 @@ Resources:
         SaveGame:
           Type: HttpApi
           Properties: {ApiId: !Ref Api, Path: /games, Method: POST}
+        ListGames:
+          Type: HttpApi
+          Properties: {ApiId: !Ref Api, Path: /games, Method: GET}
         GetGame:
           Type: HttpApi
           Properties: {ApiId: !Ref Api, Path: "/games/{id}", Method: GET}

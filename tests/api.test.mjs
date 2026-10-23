@@ -1,35 +1,8 @@
 // API tests: the real handlers against an in-memory stand-in for DynamoDB. Run with: npm test
 import test from "node:test";
 import assert from "node:assert/strict";
-import { QueryCommand, TransactWriteCommand, GetCommand } from "@aws-sdk/lib-dynamodb";
 import { makeHandler } from "../backend/src/api.mjs";
-
-// Just enough DynamoDB for these handlers: Query on PK, Get, and all-or-nothing
-// TransactWrite with attribute_not_exists conditions
-function fakeDb() {
-  const rows = new Map(), k = (pk, sk) => pk + "\u0000" + sk;
-  return {
-    rows,
-    async send(cmd) {
-      const i = cmd.input;
-      if (cmd instanceof QueryCommand) {
-        const pk = i.ExpressionAttributeValues[":pk"];
-        return { Items: [...rows.values()].filter(r => r.PK === pk).sort((a, b) => a.SK.localeCompare(b.SK)) };
-      }
-      if (cmd instanceof GetCommand) return { Item: rows.get(k(i.Key.PK, i.Key.SK)) };
-      if (cmd instanceof TransactWriteCommand) {
-        for (const { Put } of i.TransactItems) {
-          if (Put.ConditionExpression === "attribute_not_exists(PK)" && rows.has(k(Put.Item.PK, Put.Item.SK))) {
-            const e = new Error("Transaction cancelled"); e.name = "TransactionCanceledException"; throw e;
-          }
-        }
-        for (const { Put } of i.TransactItems) rows.set(k(Put.Item.PK, Put.Item.SK), { ...Put.Item });
-        return {};
-      }
-      throw new Error("fake db: unsupported " + cmd.constructor.name);
-    },
-  };
-}
+import { fakeDb } from "./fake-db.mjs";
 
 const call = async (h, routeKey, body) => {
   const r = await h({ routeKey, body: body === undefined ? undefined : typeof body === "string" ? body : JSON.stringify(body) });

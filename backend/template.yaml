@@ -99,6 +99,15 @@ Resources:
         AddVenue:
           Type: HttpApi
           Properties: {ApiId: !Ref Api, Path: /venues, Method: POST}
+        SaveGame:
+          Type: HttpApi
+          Properties: {ApiId: !Ref Api, Path: /games, Method: POST}
+        ListGames:
+          Type: HttpApi
+          Properties: {ApiId: !Ref Api, Path: /games, Method: GET}
+        GetGame:
+          Type: HttpApi
+          Properties: {ApiId: !Ref Api, Path: "/games/{id}", Method: GET}
 
   ApiLogs:
     Type: AWS::Logs::LogGroup

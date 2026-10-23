@@ -170,7 +170,15 @@ function undoGameWin(tour,m,name){
   m.winner=null;if(name===m.a)m.wa--;else m.wb--;if(m.games)m.games.pop();settle(tour);
 }
 
+/* ---------- saving (Phase 2) ---------- */
+// A finished Single or Duo game as the API's POST /games takes it. info: {id, mode, venue, started, finished}
+function gameRecord(g,info){
+  return {id:info.id,mode:info.mode,venue:info.venue||null,started:info.started||null,finished:info.finished||null,
+    sides:g.gp.slice(),members:g.members?JSON.parse(JSON.stringify(g.members)):null,
+    turns:g.hist.map(h=>({p:h.p,who:h.who||g.gp[h.p],s:h.s,c:h.c,bust:!!h.bust,before:h.before,round:h.round,at:h.at||null}))};
+}
+
 const Toads={TARGET,TO_WIN,coinsFor,keypad,finishChoices,newG,throwerOf,playTurn,undoTurn,sideStats,playerStats,
-  mk,knockSize,seedOrder,buildTour,standings,qualiDone,settle,allMatches,ready,assignTables,roundName,gameNo,recordGameWin,undoGameWin};
+  mk,knockSize,seedOrder,buildTour,standings,qualiDone,settle,allMatches,ready,assignTables,roundName,gameNo,recordGameWin,undoGameWin,gameRecord};
 if(typeof module!=="undefined"&&module.exports)module.exports=Toads;else root.Toads=Toads;
 })(this);

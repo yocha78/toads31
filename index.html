@@ -1,0 +1,968 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Cache-Control" content="no-cache">
+<meta name="description" content="Toad in the Hole scorer: count down from 31, single games, duo teams or knockout tournaments across several tables.">
+<style>*,*::before,*::after{box-sizing:border-box}:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>Toads Scorer</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Atkinson+Hyperlegible:wght@400;700&family=Cabin+Sketch:wght@400;700&family=Patrick+Hand&display=swap">
+<style>
+/* Layout: one narrow column, big tap targets — a scoreboard on a lead table, brass for action */
+:root{
+  --bg:#eceeef; --surface:#ffffff; --lead:#5b6268; --ink:#1f2326; --muted:#6a7177;
+  --brass:#b8862b; --brass-ink:#2a1d05; --line:#d5d9dc; --good:#2f7d4f; --bad:#b33a2e;
+  --wood:#7a4a24; --wood-dark:#4a2c16; --leadtop:#a9afb4; --leadedge:#6f767b; --hole:#141617;
+  --slate:#1f2a26; --chalk:#ecece4; --chalk-dim:rgba(236,236,228,.55); --chalk-yellow:#f2d36b; --chalk-red:#f08a7e;
+  --chalk-font:"Patrick Hand","Comic Sans MS",cursive; --chalk-display:"Cabin Sketch","Patrick Hand",cursive;
+  --display:"Alfa Slab One",Georgia,serif; --body:"Atkinson Hyperlegible",system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#16191b; --surface:#22272a; --lead:#9aa3a9; --ink:#eef0f1; --muted:#9aa1a6;
+  --brass:#d9a845; --brass-ink:#1c1303; --line:#343b3f; --good:#5cc28a; --bad:#ef7a6c; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#16191b; --surface:#22272a; --lead:#9aa3a9; --ink:#eef0f1; --muted:#9aa1a6;
+  --brass:#d9a845; --brass-ink:#1c1303; --line:#343b3f; --good:#5cc28a; --bad:#ef7a6c; color-scheme:dark}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.45}
+.wrap{max-width:520px;margin:0 auto;padding-inline:16px;padding-block:20px 40px;display:flex;flex-direction:column;gap:18px}
+.brand{display:flex;align-items:center;gap:14px}
+.brand > div{min-width:0}
+.logo{width:64px;height:80px;flex:none}
+h1{font-family:var(--display);font-weight:400;font-size:1.9rem;margin:0;letter-spacing:.01em}
+h1 span{color:var(--brass)}
+.sub{color:var(--muted);margin:2px 0 0;font-size:.95rem}
+h2{font-size:.78rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin:0}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.row{display:flex;gap:8px}
+input[type=text]{flex:1;min-width:0;font:inherit;padding:12px 14px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+button{font:inherit;cursor:pointer;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:12px 16px}
+button:focus-visible,input:focus-visible{outline:3px solid var(--brass);outline-offset:2px}
+button:disabled{opacity:.45;cursor:not-allowed}
+.primary{background:var(--brass);border-color:var(--brass);color:var(--brass-ink);font-weight:700}
+.ghost{background:transparent}
+.big{width:100%;padding:16px;font-size:1.1rem}
+ul.players{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+ul.players li{display:flex;align-items:center;gap:10px;padding:8px 4px 8px 10px;border-bottom:1px solid var(--line)}
+ul.players li:last-child{border-bottom:0}
+.num{font-family:var(--display);color:var(--brass);width:1.6em}
+.pname{flex:1;min-width:0;overflow-wrap:anywhere}
+.x{padding:6px 10px;color:var(--muted);border:0;background:transparent}
+.empty{color:var(--muted);font-size:.95rem;margin:0}
+/* scoreboard: one column per player */
+.cols-wrap{overflow-x:auto}
+.cols{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(82px,1fr);gap:6px}
+.col{display:flex;flex-direction:column;border-radius:12px;border:1px solid var(--line);background:var(--surface);overflow:hidden;min-width:0}
+.col.active{border-color:var(--brass);box-shadow:0 0 0 2px var(--brass) inset}
+.col.winner{border-color:var(--good);box-shadow:0 0 0 2px var(--good) inset}
+.col .n{font-weight:700;font-size:.9rem;padding:8px 8px 2px;text-align:center;overflow-wrap:anywhere}
+.col .rem{font-family:var(--display);font-size:1.7rem;text-align:center;font-variant-numeric:tabular-nums;line-height:1.1}
+.col .lbl{font-size:.68rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);text-align:center;padding-bottom:6px}
+.bar{height:5px;background:var(--line);margin:0 8px 8px;border-radius:3px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--lead)}
+.col.active .bar i{background:var(--brass)}
+.rounds{list-style:none;margin:0;padding:0;border-top:1px solid var(--line);font-variant-numeric:tabular-nums}
+.rounds li{display:grid;grid-template-columns:auto 1fr auto;gap:6px;align-items:baseline;padding:3px 8px;font-size:.9rem}
+.rounds .sc{display:flex;align-items:center;justify-content:flex-end;gap:3px;font-weight:400;color:var(--ink)}
+.toad{width:13px;height:11px;fill:var(--brass);flex:none}
+.rounds li b{min-width:1.6em;text-align:right;font-weight:700}
+.rounds li:nth-child(even){background:var(--bg)}
+.rounds .r{color:var(--muted);font-size:.78rem}
+.rounds .bust{color:var(--bad);text-decoration:line-through}
+.avg{border-top:1px solid var(--line);padding:8px;text-align:center}
+.avg b{font-family:var(--display);font-size:1.4rem;font-weight:400;color:var(--brass);display:block;line-height:1.1}
+.avg span{font-size:.72rem;color:var(--muted)}
+/* chalkboard: same look in light and dark — a slate in a wooden frame */
+.chalk{background:radial-gradient(ellipse at 30% 20%,rgba(255,255,255,.06),transparent 60%),var(--slate);border:10px solid var(--wood);border-radius:6px;box-shadow:inset 0 0 0 2px var(--wood-dark),inset 0 0 24px rgba(0,0,0,.45);padding:10px 6px;color:var(--chalk);font-family:var(--chalk-font);text-shadow:0 0 1px rgba(236,236,228,.6)}
+/* one grid: round numbers once on the left, one column per player */
+.sheet{display:grid;font-variant-numeric:tabular-nums}
+.sheet .c{padding:2px 6px;border-left:2px dashed rgba(236,236,228,.3);min-width:0;text-align:center}
+.sheet .k{padding:2px 6px 2px 2px;color:var(--chalk-dim);font-size:.85rem;text-align:left;white-space:nowrap;align-self:center}
+.sheet .n{font-family:var(--chalk-display);font-weight:700;font-size:1.05rem;overflow-wrap:anywhere;padding-top:4px}
+.sheet .rem{font-family:var(--chalk-display);font-weight:700;font-size:2rem;line-height:1.05}
+.sheet .ring{display:inline-block;min-width:1.55em;padding:0 .18em;line-height:1.3;border:2px solid currentColor;border-radius:52% 48% 55% 45% / 50% 55% 45% 50%;transform:rotate(-6deg);box-shadow:1px 1px 0 rgba(236,236,228,.25)}
+.sheet .row .ring{border-width:1.5px;line-height:1.2;padding:0 .12em;min-width:1.5em;text-align:center}
+.sheet .lbl{color:var(--chalk-dim);font-size:.85rem}
+.sheet .barc{padding-bottom:8px}
+.sheet .bar{background:rgba(236,236,228,.15);height:4px;margin:0;border-radius:3px;overflow:hidden}
+.sheet .bar i{display:block;height:100%;background:var(--chalk)}
+.sheet .first{border-top:2px solid rgba(236,236,228,.35);padding-top:4px}
+.sheet .row{display:flex;align-items:baseline;justify-content:space-between;gap:4px;font-size:1.05rem}
+.sheet .sc{display:flex;align-items:center;gap:3px}
+.sheet .row b{font-weight:700}
+.sheet .bust{color:var(--chalk-red);text-decoration:line-through}
+.sheet .on .n,.sheet .on.rem{color:var(--chalk-yellow)}
+.sheet .on.n{color:var(--chalk-yellow);text-decoration:underline wavy rgba(242,211,107,.7);text-underline-offset:4px}
+.sheet .on.rem{color:var(--chalk-yellow)}
+.sheet .avgc{border-top:2px solid rgba(236,236,228,.35);padding-block:6px;font-family:var(--chalk-display);font-weight:700;font-size:1.4rem;color:var(--chalk-yellow)}
+.tally{display:inline-flex;gap:5px;margin-left:5px;color:var(--chalk-yellow);font-family:var(--chalk-font);font-weight:400;letter-spacing:1px;text-decoration:none;white-space:nowrap}
+.tally .gate{position:relative}
+.tally .gate::after{content:"";position:absolute;left:-2px;right:-2px;top:50%;border-top:2px solid var(--chalk-yellow);transform:rotate(-20deg)}
+.chalk .toad{fill:var(--chalk-yellow);width:13px;height:11px}
+.chalk .toad circle[fill]{fill:var(--slate)}
+.turn{text-align:center;display:flex;flex-direction:column;gap:4px}
+.turn .who{font-family:var(--display);font-size:1.6rem;overflow-wrap:anywhere}
+.turn .need{color:var(--muted)}
+.pad{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;max-width:320px;margin:0 auto;width:100%}
+.pad button{font-family:var(--display);font-size:1.1rem;padding:8px 0;border-radius:8px;font-variant-numeric:tabular-nums}
+.pad button.over{color:var(--muted);border-style:dashed}
+.msg{min-height:1.4em;text-align:center;font-weight:700;margin:0}
+.msg.bad{color:var(--bad)} .msg.good{color:var(--good)}
+.log{list-style:none;margin:0;padding:0;font-size:.92rem;color:var(--muted);display:flex;flex-direction:column;gap:2px;max-height:180px;overflow:auto}
+.log b{color:var(--ink)}
+.win{text-align:center;padding:18px 16px}
+.winrow{display:flex;align-items:center;justify-content:center;gap:10px;min-width:0}
+.win .trophy{flex:none;display:block;width:44px}
+.win .trophy .toad{width:44px;height:38px;display:block}
+.win h2{font-size:.85rem}
+.win .who{font-family:var(--display);font-size:2.2rem;margin:4px 0;overflow-wrap:anywhere}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.actions button{flex:1 1 140px}
+.confirm{display:flex;flex-direction:column;gap:8px;padding:12px;border-radius:10px;border:1px dashed var(--bad)}
+.seg.seg2{grid-template-columns:1fr 1fr}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;padding:4px;border-radius:12px;background:var(--bg);border:1px solid var(--line)}
+.seg button{border:0;background:transparent;padding:10px;border-radius:8px;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--brass);color:var(--brass-ink);font-weight:700}
+.hint{color:var(--muted);font-size:.92rem;margin:0}
+/* knockout bracket on the chalkboard: one column per round */
+.bracket{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(124px,1fr);gap:14px;padding:4px}
+.bround{display:flex;flex-direction:column;gap:8px;min-width:0}
+.bround h3{font-family:var(--chalk-display);font-weight:700;font-size:1rem;margin:0;color:var(--chalk-dim);text-align:center}
+.bmatches{display:flex;flex-direction:column;justify-content:space-around;flex:1;gap:10px}
+.bm{border:2px solid rgba(236,236,228,.35);border-radius:4px}
+.bm.now{border-color:var(--chalk-yellow);box-shadow:0 0 0 1px var(--chalk-yellow)}
+.bm .bp{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:3px 8px;font-size:1.05rem;min-width:0}
+.bm .bp span:first-child{overflow-wrap:anywhere;min-width:0}
+.bm .bp + .bp{border-top:1px dashed rgba(236,236,228,.3)}
+.bm .bp.w{color:var(--chalk-yellow)}
+.bm .bp.l{color:var(--chalk-dim);text-decoration:line-through}
+.bm .bp.tbd{color:var(--chalk-dim)}
+.bm .s{font-family:var(--chalk-display);font-weight:700}
+.bm.champ{border-color:var(--chalk-yellow)}
+.bm.champ .bp{justify-content:flex-start;font-family:var(--chalk-display);font-weight:700;font-size:1.2rem}
+.win .cols-wrap{margin-top:4px}
+.stepper{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border-radius:12px;background:var(--bg)}
+.stepper > span{min-width:0}
+.step{display:flex;align-items:center;gap:6px;flex:none}
+.step button{width:44px;height:44px;padding:0;font-size:1.3rem;font-weight:700}
+.step output{font-family:var(--display);font-size:1.5rem;min-width:1.6em;text-align:center;font-variant-numeric:tabular-nums}
+.tables{display:grid;grid-template-columns:1fr;gap:8px}
+.nextbox{display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--line);padding-top:8px}
+#nextSummary{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.85rem}
+.nextlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.nextlist li{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:10px;align-items:center;padding:6px 2px;border-bottom:1px dashed var(--line)}
+.nextlist li:last-child{border-bottom:0}
+.nextlist .nm{font-family:var(--display);font-size:1rem;overflow-wrap:anywhere}
+.nextlist .nr{grid-column:1;color:var(--muted);font-size:.8rem}
+.nextlist .pill{grid-column:2;grid-row:1 / span 2;white-space:nowrap}
+.ask{display:flex;flex-direction:column;gap:10px;padding:12px;border-radius:12px;border:2px solid var(--brass);background:var(--bg)}
+.ask p{margin:0;font-weight:700}
+.askbtns{display:flex;gap:8px;flex-wrap:wrap}
+.askbtns button{flex:1 1 90px}
+.collapse{display:flex;align-items:center;gap:10px;width:100%;padding:4px 0;border:0;background:transparent;text-align:left}
+.collapse .tsum{flex:1;min-width:0;color:var(--muted);font-size:.9rem;text-align:right}
+.collapse .chev{width:9px;height:9px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg);margin:0 4px 4px;flex:none}
+.collapse[aria-expanded="false"] .chev{transform:rotate(-45deg);margin-bottom:0}
+@media (prefers-reduced-motion:no-preference){.collapse .chev{transition:transform .2s ease}}
+.tbody{display:flex;flex-direction:column;gap:12px}
+/* compact card: details on the left, the action button beside them on the right */
+.tcard{border:1px solid var(--line);border-radius:12px;padding:8px 10px;display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:10px;row-gap:1px;align-items:center;background:var(--bg);min-width:0}
+.tcard > *{grid-column:1;min-width:0}
+.tcard > button{grid-column:2;grid-row:2 / span 3;padding:8px 12px;font-size:.9rem;white-space:nowrap;border-radius:8px}
+.tcard.free{border-style:dashed;background:transparent}
+.tcard .tn{grid-column:1 / -1;display:flex;justify-content:space-between;align-items:center;font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
+.tcard .tw{font-family:var(--display);font-size:1.05rem;line-height:1.25;overflow-wrap:anywhere}
+.tcard .ti{color:var(--muted);font-size:.82rem}
+.tcard .live{font-weight:700;font-size:.85rem;font-variant-numeric:tabular-nums}
+.pill{font-size:.65rem;padding:1px 7px;border-radius:99px;background:var(--brass);color:var(--brass-ink);letter-spacing:.06em}
+.pill.idle{background:var(--line);color:var(--muted)}
+.bm{position:relative}
+.bm .tb{position:absolute;top:-.8em;right:6px;font-size:.75rem;padding:0 5px;background:var(--slate);color:var(--chalk-yellow)}
+.bm.now{margin-top:6px}
+.teamsbox{display:flex;flex-direction:column;gap:10px}
+.teamlist{display:flex;flex-direction:column;gap:10px}
+.team{display:flex;flex-direction:column;gap:8px;padding:12px;border-radius:12px;background:var(--bg);border:1px solid var(--line)}
+.trow{display:flex;gap:8px;align-items:center}
+.tname{font-weight:700}
+.tslots{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:end}
+.tslots label{display:flex;flex-direction:column;gap:4px;min-width:0;font-size:.8rem;color:var(--muted)}
+.tslots select{font:inherit;font-size:1rem;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 8px;min-width:0;width:100%}
+.swap{padding:10px 10px;font-size:.85rem}
+.sheet .mem{display:inline-block;width:100%;font-family:var(--chalk-font);font-weight:400;font-size:.85rem;color:var(--chalk-dim);text-decoration:none}
+.sheet .mem .next{color:var(--chalk-yellow);text-decoration:underline wavy rgba(242,211,107,.7);text-underline-offset:3px}
+.sheet .on.n .mem{text-decoration:none}
+.sheet .pstats{display:flex;flex-direction:column;gap:6px;padding-block:6px;border-top:2px solid rgba(236,236,228,.35)}
+.pst{display:grid;grid-template-columns:1fr auto;align-items:baseline;gap:0 6px;text-align:left}
+.pst b{font-family:var(--chalk-display);font-weight:700;font-size:1.15rem;color:var(--chalk-yellow)}
+.pst small{grid-column:1/-1;color:var(--chalk-dim);font-size:.75rem}
+.qhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;width:100%;padding:2px 6px 6px;border:0;background:transparent;text-align:left;font:inherit;color:inherit;border-radius:4px}
+.qhead span{flex:1;min-width:0;text-align:right}
+.qhead .chev{width:9px;height:9px;border-right:2px solid var(--chalk-dim);border-bottom:2px solid var(--chalk-dim);transform:rotate(45deg);margin:0 2px 4px;flex:none}
+.qhead[aria-expanded="false"] .chev{transform:rotate(-45deg);margin-bottom:0}
+@media (prefers-reduced-motion:no-preference){.qhead .chev{transition:transform .2s ease}}
+.qhead h3{margin:0;font-family:var(--chalk-display);font-weight:700;font-size:1.1rem;color:var(--chalk)}
+.qhead span{color:var(--chalk-dim);font-size:.9rem}
+.qtab{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:1.05rem}
+.qtab th{font-weight:400;color:var(--chalk-dim);font-size:.85rem;text-align:center;padding:2px 6px;border-bottom:2px solid rgba(236,236,228,.35)}
+.qtab td{text-align:center;padding:3px 6px}
+.qtab .nm{text-align:left;overflow-wrap:anywhere}
+.qtab tr.in td{color:var(--chalk-yellow)}
+.qtab tr.cut td{border-bottom:2px dashed rgba(242,211,107,.7)}
+.qnote{margin:6px 6px 0;color:var(--chalk-dim);font-size:.8rem}
+.picked{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.picked li{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;background:var(--bg);font-weight:700}
+.picked li .num{font-family:var(--display);font-weight:400}
+.picked li.slot{background:transparent;border:1px dashed var(--line);color:var(--muted);font-weight:400}
+.pickgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}
+.pickgrid button{font-weight:700;overflow-wrap:anywhere}
+@media (prefers-reduced-motion:no-preference){.bar i{transition:width .3s ease}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="brand">
+    <svg class="logo" viewBox="0 0 80 100" role="img" aria-label="Toad in the hole table">
+      <!-- backboard -->
+      <rect x="17" y="3" width="46" height="30" rx="6" fill="var(--wood)"/>
+      <path d="M21 9h38M21 15h38M21 21h38" stroke="var(--wood-dark)" stroke-width=".6" opacity=".35"/>
+      <!-- lead top in perspective -->
+      <polygon points="18,27 62,27 71,53 9,53" fill="var(--leadtop)"/>
+      <polygon points="9,53 71,53 71,56 9,56" fill="var(--leadedge)"/>
+      <path d="M22 33l4 1M48 31l5 2M30 45l6-1M55 47l4 1M16 49l5 1M42 50l4-1" stroke="var(--leadedge)" stroke-width=".7" opacity=".6"/>
+      <ellipse cx="40" cy="39" rx="4.6" ry="2.8" fill="var(--hole)"/>
+      <!-- a brass toad resting on the lead -->
+      <ellipse cx="56" cy="46" rx="4" ry="1.9" fill="var(--brass)"/>
+      <!-- apron and drawer -->
+      <rect x="10" y="56" width="60" height="15" fill="var(--wood-dark)"/>
+      <rect x="16" y="59" width="48" height="10" rx="1" fill="var(--wood)"/>
+      <path d="M35 62.5a5 3.2 0 0 0 10 0z" fill="var(--brass)"/>
+      <!-- barley-twist legs -->
+      <g fill="var(--wood-dark)">
+        <rect x="13" y="71" width="6" height="25" rx="1"/>
+        <rect x="61" y="71" width="6" height="25" rx="1"/>
+        <rect x="16" y="89" width="48" height="3"/>
+      </g>
+      <g stroke="var(--wood)" stroke-width="1.2" stroke-linecap="round">
+        <path d="M13.6 74l4.8 2.5M13.6 78.5l4.8 2.5M13.6 83l4.8 2.5M61.6 74l4.8 2.5M61.6 78.5l4.8 2.5M61.6 83l4.8 2.5"/>
+      </g>
+    </svg>
+    <div>
+      <h1>Toads <span>31</span></h1>
+      <p class="sub">Count down from 31. 2 in the hole, 1 on the table. Finish exactly.</p>
+    </div>
+  </header>
+
+  <!-- SETUP -->
+  <section id="setup" class="panel">
+    <div class="seg" role="group" aria-label="Game type">
+      <button type="button" id="modeSingle" aria-pressed="true">Single game</button>
+      <button type="button" id="modeDuo" aria-pressed="false">Duo</button>
+      <button type="button" id="modeTour" aria-pressed="false">Tournament</button>
+    </div>
+    <p class="hint" id="modeHint"></p>
+    <div class="seg seg2" id="formatRow" role="group" aria-label="Tournament format" hidden>
+      <button type="button" id="fmtQuali" aria-pressed="true">Qualifying round</button>
+      <button type="button" id="fmtByes" aria-pressed="false">Byes</button>
+    </div>
+    <div class="stepper" id="tablesRow" hidden>
+      <span><b>Tables available</b><br><span class="hint">Matches run side by side, one per table.</span></span>
+      <div class="step">
+        <button type="button" id="tablesMinus" aria-label="Fewer tables">−</button>
+        <output id="tablesVal">1</output>
+        <button type="button" id="tablesPlus" aria-label="More tables">+</button>
+      </div>
+    </div>
+    <h2>Players</h2>
+    <form id="addForm" class="row">
+      <input type="text" id="nameInput" placeholder="Player name" maxlength="24" autocomplete="off" aria-label="Player name">
+      <button class="primary" type="submit">Add</button>
+    </form>
+    <ul class="players" id="playerList"></ul>
+    <p class="empty" id="noPlayers">Add one or more players.</p>
+    <div class="teamsbox" id="teamsBox" hidden>
+      <h2>Teams</h2>
+      <div class="teamlist" id="teamList"></div>
+      <button class="ghost" id="addTeamBtn">Add a team</button>
+      <p class="hint" id="teamHint"></p>
+    </div>
+    <button class="ghost" id="shuffleBtn" hidden>Shuffle the draw</button>
+    <button class="primary big" id="startBtn" disabled>Start game</button>
+  </section>
+
+  <!-- THROWING ORDER -->
+  <section id="orderView" class="panel" hidden>
+    <h2 id="orderTitle">Throwing order</h2>
+    <p class="hint" id="orderHint">Each player throws one toad. Tap the players from closest to the hole to furthest away.</p>
+    <ol class="picked" id="pickedList"></ol>
+    <div class="pickgrid" id="pickGrid"></div>
+    <div class="actions">
+      <button class="ghost" id="orderBack">Back</button>
+      <button class="ghost" id="orderReset">Start over</button>
+    </div>
+    <button class="primary big" id="orderGo" disabled>Start game</button>
+  </section>
+
+  <!-- TOURNAMENT: TABLES + BRACKET -->
+  <section id="bracketView" hidden>
+    <div class="wrap" style="padding:0;gap:14px">
+      <div class="panel win" id="champPanel" hidden>
+        <h2>Tournament champion</h2>
+        <div class="winrow"><span class="trophy" id="champToad" aria-hidden="true"></span><div class="who" id="champName"></div></div>
+        <div class="actions">
+          <button class="primary" id="champNew">New tournament</button>
+          <button id="champChange">Change players</button>
+        </div>
+      </div>
+      <div class="panel" id="tablesPanel">
+        <button type="button" class="collapse" id="tablesToggle" aria-expanded="true" aria-controls="tablesBody">
+          <h2>Tables</h2><span class="tsum" id="tablesSummary"></span><span class="chev" aria-hidden="true"></span>
+        </button>
+        <div class="tbody" id="tablesBody">
+          <div class="tables" id="tableCards"></div>
+          <div class="nextbox" id="nextBox" hidden>
+            <button type="button" class="collapse" id="nextToggle" aria-expanded="false" aria-controls="nextList"><h2>Next to come</h2><span class="tsum" id="nextSummary"></span><span class="chev" aria-hidden="true"></span></button>
+            <ul class="nextlist" id="nextList" hidden></ul>
+          </div>
+          <div class="actions"><button class="ghost" id="endTourBtn">End tournament</button></div>
+          <div class="confirm" id="endTourConfirm" hidden>
+            <span>End the tournament and go back to players? All results are lost.</span>
+            <div class="actions"><button id="endTourNo">Keep playing</button><button class="primary" id="endTourYes">End tournament</button></div>
+          </div>
+        </div>
+      </div>
+      <div class="cols-wrap chalk" id="qualiWrap" hidden><div id="quali"></div></div>
+      <div class="cols-wrap chalk"><div id="bracket"></div></div>
+    </div>
+  </section>
+
+  <!-- GAME -->
+  <section id="game" hidden>
+    <div class="wrap" style="padding:0;gap:14px">
+      <div class="panel turn">
+        <p class="need" id="matchInfo" hidden></p>
+        <h2>Throwing now</h2>
+        <div class="who" id="turnName"></div>
+        <div class="need" id="turnNeed"></div>
+        <p class="msg" id="msg" aria-live="polite"></p>
+        <div class="pad" id="pad"></div>
+        <div class="ask" id="finishAsk" hidden>
+          <p id="finishQ"></p>
+          <div class="askbtns" id="finishBtns"></div>
+          <button class="ghost" id="finishCancel">Wrong score, go back</button>
+        </div>
+        <div class="actions">
+          <button class="ghost" id="undoBtn">Undo last turn</button>
+          <button class="ghost" id="quitBtn">End game</button>
+        </div>
+        <div class="confirm" id="quitConfirm" hidden>
+          <span>End this game and go back to players?</span>
+          <div class="actions"><button id="quitNo">Keep playing</button><button class="primary" id="quitYes">End game</button></div>
+        </div>
+      </div>
+      <div class="cols-wrap chalk"><div id="board"></div></div>
+    </div>
+  </section>
+
+  <!-- WIN -->
+  <section id="win" class="panel win" hidden>
+    <h2 id="winLabel">Winner</h2>
+    <div class="winrow"><span class="trophy" id="trophy" aria-hidden="true"></span><div class="who" id="winName"></div></div>
+    <p class="sub" id="winInfo"></p>
+    <div class="actions">
+      <button class="primary" id="againBtn">Play again</button>
+      <button id="changeBtn">Change players</button>
+    </div>
+    <div class="cols-wrap chalk" style="text-align:left"><div id="results"></div></div>
+    <p class="hint">Avg / toad = points scored ÷ toads thrown, from 0 to 2. Busts count the points actually thrown, even though they don't change the score.</p>
+    <button class="ghost" id="undoWinBtn">Undo winning throw</button>
+  </section>
+  <p class="hint" style="text-align:center">Version 22 Oct 2026 · Next to come</p>
+</div>
+
+<script>
+const TARGET=31, KEY="toads31", TO_WIN=2, MAX_TABLES=8;
+// Toads per turn: the game's 1st turn throws 2, the 2nd throws 3, every later turn 4.
+// Near the end a player throws no more toads than the points they have left.
+const coinsFor=(turnIdx,left)=>Math.min(turnIdx===0?2:turnIdx===1?3:4,left);
+const TOAD=`<svg class="toad" viewBox="0 0 16 14" aria-hidden="true"><circle cx="4.5" cy="3.5" r="2.6"/><circle cx="11.5" cy="3.5" r="2.6"/><ellipse cx="8" cy="9" rx="7" ry="4.6"/><circle cx="4.5" cy="3.2" r="1" fill="var(--surface)"/><circle cx="11.5" cy="3.2" r="1" fill="var(--surface)"/></svg>`;
+/* State
+   players: registered list · g: the single-mode game · tour: knockout bracket, each match holds its own game and table
+   focus: which tournament match is on screen · ord: throwing-order picker · last: the win just recorded (for undo) */
+let S={players:[],teams:[],tourFormat:"quali",mode:"single",tables:1,stage:"setup",g:null,wins:{},tour:null,focus:null,last:null,ord:null};
+const $=id=>document.getElementById(id);
+
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+function load(){try{const v=JSON.parse(localStorage.getItem(KEY));if(v&&Array.isArray(v.players))S=Object.assign(S,v)}catch(e){}}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
+
+const isTour=()=>S.mode==="tournament"&&!!S.tour;
+// ri -1 = qualifying round, 0.. = knockout rounds
+const matchAt=(ri,mi)=>ri<0?(S.tour.quali||{matches:[]}).matches[mi]||null:(S.tour.rounds[ri]||[])[mi]||null;
+const M=()=>isTour()&&S.focus?matchAt(S.focus.ri,S.focus.mi):null;
+const G=()=>isTour()?(M()||{}).game||null:S.g;
+const newG=players=>({gp:players,rem:players.map(()=>TARGET),cur:0,hist:[],round:1,done:false});
+
+/* ---------- tournament ---------- */
+const mk=(a,b,bye)=>({a,b,wa:0,wb:0,winner:bye?a:null,bye:!!bye,table:null,game:null});
+// Largest knockout size (2, 4, 8, 16, 32…) that fits the number of players
+const knockSize=n=>{let k=1;while(k*2<=n)k*=2;return k};
+// Standard seeding: 1 v K, 2 v K-1… placed so seeds 1 and 2 can only meet in the final
+function seedOrder(K){let a=[1];while(a.length<K){const m=a.length*2+1;a=a.flatMap(x=>[x,m-x])}return a}
+
+// With 2, 4, 8, 16… players: straight knockout, pairing the list in order (1 v 2, 3 v 4…).
+// Otherwise, format "byes": the bracket is rounded up to the next 2/4/8/16… and the spare slots are
+// round-1 byes given to players picked at random. Byes only ever happen in round 1, spread across the
+// bracket (seed positions) so bye players meet round-1 winners where possible.
+// Otherwise, format "quali" (default): a qualifying round first. Players sit in a circle in draw order and each plays
+// the two either side, so everyone plays exactly 2 matches. The top K go into a seeded knockout.
+// Each later match takes the winners of two matches above it, so the whole bracket exists from the start.
+function buildTour(names,tables,format){
+  const n=names.length, K=knockSize(n), byes=K<n&&format==="byes", quali=K<n&&!byes;
+  const r0=[];
+  if(quali)for(let j=0;j<K/2;j++)r0.push(mk(null,null));
+  else if(byes){
+    const K2=K*2, b=K2-n, slots=K2/2, seeds=seedOrder(K2);
+    const byeSlots=new Set(Array.from({length:b},(_,s)=>Math.floor(seeds.indexOf(s+1)/2)));
+    const pool=names.slice();for(let i=pool.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]]}
+    const lucky=new Set(pool.slice(0,b));
+    const byeP=names.filter(p=>lucky.has(p)), rest=names.filter(p=>!lucky.has(p));
+    for(let j=0;j<slots;j++)r0.push(byeSlots.has(j)?mk(byeP.shift(),null,true):mk(rest.shift(),rest.shift()));
+  }
+  else for(let i=0;i<n;i+=2)r0.push(i+1<n?mk(names[i],names[i+1]):mk(names[i],null,true));
+  const rounds=[r0];
+  while(rounds[rounds.length-1].length>1){
+    const prev=rounds[rounds.length-1];
+    rounds.push(Array.from({length:Math.ceil(prev.length/2)},(_,j)=>mk(null,null,2*j+1>=prev.length)));
+  }
+  let q=null;
+  if(quali){
+    // circle edges, every other one first so several tables can play at once
+    const edges=names.map((p,i)=>[p,names[(i+1)%n],i]);
+    const ordered=[...edges.filter(e=>e[2]%2===0),...edges.filter(e=>e[2]%2===1)];
+    q={matches:ordered.map(([a,b])=>({...mk(a,b),games:[]})),K,draw:names.slice()};
+  }
+  return {v:2,n,tables:Math.max(1,Math.min(tables,Math.floor(n/2))),rounds,champion:null,quali:q,format:byes?"byes":quali?"quali":"knockout"};
+}
+
+// Qualifying table, best first: matches won, then games won minus lost, then average per toad,
+// then the result between the two if they played each other, then draw order.
+function standings(){
+  const q=S.tour.quali;if(!q)return[];
+  const row=Object.fromEntries(q.draw.map((p,i)=>[p,{name:p,idx:i,pl:0,w:0,gw:0,gl:0,pts:0,toads:0}]));
+  for(const m of q.matches){
+    for(const g of m.games||[])for(const [p,v] of Object.entries(g)){if(row[p]){row[p].pts+=v.pts;row[p].toads+=v.toads}}
+    if(!m.winner)continue;
+    const A=row[m.a],B=row[m.b];
+    A.pl++;B.pl++;A.gw+=m.wa;A.gl+=m.wb;B.gw+=m.wb;B.gl+=m.wa;
+    row[m.winner].w++;
+  }
+  const avg=r=>r.toads?r.pts/r.toads:0;
+  const h2h=(x,y)=>{const m=q.matches.find(m=>m.winner&&((m.a===x.name&&m.b===y.name)||(m.a===y.name&&m.b===x.name)));return m?(m.winner===x.name?-1:1):0};
+  return Object.values(row).sort((x,y)=>y.w-x.w||(y.gw-y.gl)-(x.gw-x.gl)||avg(y)-avg(x)||h2h(x,y)||x.idx-y.idx)
+    .map(r=>({...r,avg:avg(r)}));
+}
+const qualiDone=()=>{const q=S.tour.quali;return !q||q.matches.every(m=>m.winner)};
+
+// Fill the knockout with qualifiers (once qualifying is complete) and with winners as they come in
+function settle(){
+  const R=S.tour.rounds, q=S.tour.quali;
+  if(q){
+    const done=qualiDone(), st=done?standings():null, seeds=seedOrder(q.K);
+    R[0].forEach((m,j)=>{m.a=done?st[seeds[2*j]-1].name:null;m.b=done?st[seeds[2*j+1]-1].name:null});
+  }
+  for(let r=1;r<R.length;r++)R[r].forEach((m,j)=>{
+    m.a=R[r-1][2*j].winner||null;
+    if(m.bye){m.b=null;m.winner=m.a}else m.b=R[r-1][2*j+1].winner||null;
+  });
+  S.tour.champion=R[R.length-1][0].winner||null;
+}
+const all=()=>[...(S.tour.quali?S.tour.quali.matches.map((m,mi)=>({m,ri:-1,mi})):[]),...S.tour.rounds.flatMap((r,ri)=>r.map((m,mi)=>({m,ri,mi})))];
+const ready=m=>m.a&&m.b&&!m.winner;
+// Give free tables to matches whose two players are known, earliest round first.
+// A player can only be at one table at a time (matters in the qualifying round).
+function assignTables(){
+  const t=S.tour, used=new Set(), busy=new Set();
+  all().forEach(({m})=>{if(m.table!=null&&!m.winner){used.add(m.table);busy.add(m.a);busy.add(m.b)}});
+  for(const {m} of all()){
+    if(!ready(m)||m.table!=null)continue;
+    if(busy.has(m.a)||busy.has(m.b))continue;
+    let k=0;while(k<t.tables&&used.has(k))k++;
+    if(k>=t.tables)break;
+    m.table=k;used.add(k);busy.add(m.a);busy.add(m.b);
+  }
+}
+function roundName(ri){
+  if(ri<0)return "Qualifying";
+  const fromEnd=S.tour.rounds.length-1-ri;
+  return fromEnd===0?"Final":fromEnd===1?"Semi-finals":fromEnd===2?"Quarter-finals":`Round ${ri+1}`;
+}
+const gameNo=m=>m.wa+m.wb+1;
+// Team wins are kept apart from player wins, in case a team shares a player's name
+const winKey=(g,name)=>g&&g.members?"team:"+name:name;
+// Whose throw it is: the player, or in Duo the partner whose go it is (partners alternate each team turn)
+function throwerOf(g,i){
+  if(!g.members)return g.gp[i];
+  const k=g.hist.filter(h=>h.p===i).length;
+  return g.members[g.gp[i]][k%2];
+}
+function matchWins(name){
+  if(!isTour())return S.wins[winKey(G(),name)]||0;
+  const m=M();if(!m)return 0;
+  return name===m.a?m.wa:name===m.b?m.wb:0;
+}
+
+/* ---------- rendering ---------- */
+function render(){
+  for(const id of["setup","orderView","bracketView","game","win"])$(id).hidden=true;
+  const views={setup:["setup",renderSetup],order:["orderView",renderOrder],bracket:["bracketView",renderHub],game:["game",renderGame],win:["win",renderWin]};
+  const v=views[S.stage];
+  if(!v){S.stage="setup";return render()}
+  $(v[0]).hidden=false;v[1]();
+  save();
+}
+
+function renderSetup(){
+  const T=S.mode==="tournament", D=S.mode==="duo", n=S.players.length;
+  $("modeSingle").setAttribute("aria-pressed",S.mode==="single");
+  $("modeDuo").setAttribute("aria-pressed",D);
+  $("modeTour").setAttribute("aria-pressed",T);
+  $("modeHint").textContent=T
+    ?tourHint(n)
+    :D?"Teams of two share one score from 31. Team-mates take it in turns: each time it's the team's go, the other partner throws."
+    :"Everyone plays in one game. One player on their own works too.";
+  $("teamsBox").hidden=!D;
+  if(D)renderTeams();
+  $("tablesRow").hidden=!T;
+  const odd=T&&n>=3&&knockSize(n)!==n;
+  $("formatRow").hidden=!odd;
+  $("fmtQuali").setAttribute("aria-pressed",S.tourFormat!=="byes");
+  $("fmtByes").setAttribute("aria-pressed",S.tourFormat==="byes");
+  $("tablesVal").textContent=S.tables;
+  $("tablesMinus").disabled=S.tables<=1;
+  $("tablesPlus").disabled=S.tables>=MAX_TABLES;
+  $("playerList").innerHTML=S.players.map((p,i)=>`<li><span class="num">${i+1}</span><span class="pname">${esc(p)}</span><button class="x" data-i="${i}" aria-label="Remove ${esc(p)}">Remove</button></li>`).join("");
+  $("noPlayers").hidden=n>0;
+  $("noPlayers").textContent=T?"Add at least two players.":D?"Add players, then put them into teams of two below.":"Add one or more players.";
+  $("shuffleBtn").hidden=!(T&&n>2);
+  setupStart();
+}
+function tourHint(n){
+  const base="Knockout, one against one. First to win 2 games takes the match, and winners meet in the next round.";
+  if(n<2)return base;
+  const K=knockSize(n);
+  if(K===n)return `${base} With ${n} players the draw follows the list: 1 v 2, 3 v 4…`;
+  if(S.tourFormat==="byes"){
+    const b=K*2-n;
+    return `${base} With ${n} players, ${b} player${b===1?"":"s"} picked at random get${b===1?"s":""} a bye and skip round 1. Byes only happen in round 1, so after that everyone plays every round.`+(n===3?" With 3 players that means the bye goes straight to the final.":"");
+  }
+  return `${base} With ${n} players there's a qualifying round first: everyone plays 2 matches against the players either side of them in the list, then the top ${K} go into a seeded knockout.`;
+}
+function setupStart(){
+  const T=S.mode==="tournament", D=S.mode==="duo", n=S.players.length;
+  $("startBtn").disabled=T?n<2:D?!!teamProblem():n===0;
+  $("startBtn").textContent=T?"Start tournament":D?"Start duo game":n===1?"Start solo game":"Start game";
+  if(D)$("teamHint").textContent=teamProblem()||"Ready. The partner chosen as 1st throws on the team's first turn.";
+}
+
+/* ---------- duo teams ---------- */
+// Each team: {name, a: throws 1st, b: throws 2nd}
+function teamProblem(){
+  const t=S.teams;
+  if(!t.length)return "Add at least one team.";
+  if(t.some(x=>!x.a||!x.b))return "Each team needs two players.";
+  if(t.some(x=>x.a===x.b))return "A team needs two different players.";
+  const used=t.flatMap(x=>[x.a,x.b]);
+  if(new Set(used).size!==used.length)return "A player can only be in one team.";
+  if(t.some(x=>!x.name.trim()))return "Give every team a name.";
+  if(new Set(t.map(x=>x.name.trim().toLowerCase())).size!==t.length)return "Two teams have the same name.";
+  return "";
+}
+function renderTeams(){
+  // drop anyone no longer on the player list
+  S.teams.forEach(t=>{if(!S.players.includes(t.a))t.a=null;if(!S.players.includes(t.b))t.b=null});
+  const taken=(ti,slot)=>new Set(S.teams.flatMap((t,j)=>[j===ti&&slot==="a"?null:t.a,j===ti&&slot==="b"?null:t.b]).filter(Boolean));
+  const opts=(ti,slot)=>{const cur=S.teams[ti][slot],tk=taken(ti,slot);
+    return `<option value="">Choose…</option>`+S.players.filter(p=>p===cur||!tk.has(p)).map(p=>`<option value="${esc(p)}"${p===cur?" selected":""}>${esc(p)}</option>`).join("")};
+  $("teamList").innerHTML=S.teams.map((t,i)=>`<div class="team">
+    <div class="trow"><input type="text" id="tname${i}" class="tname" data-t="${i}" value="${esc(t.name)}" maxlength="20" aria-label="Team name"><button class="x" data-rmt="${i}">Remove</button></div>
+    <div class="tslots">
+      <label for="ta${i}"><span>Throws 1st</span><select id="ta${i}" data-t="${i}" data-slot="a">${opts(i,"a")}</select></label>
+      <button type="button" class="swap" data-swap="${i}" aria-label="Swap who throws first in ${esc(t.name)}">Swap</button>
+      <label for="tb${i}"><span>Throws 2nd</span><select id="tb${i}" data-t="${i}" data-slot="b">${opts(i,"b")}</select></label>
+    </div></div>`).join("")||`<p class="empty">No teams yet.</p>`;
+  const free=S.players.filter(p=>!S.teams.some(t=>t.a===p||t.b===p));
+  $("addTeamBtn").disabled=S.teams.length>=Math.max(1,Math.floor(S.players.length/2))&&free.length<2;
+}
+function addTeam(){
+  const free=S.players.filter(p=>!S.teams.some(t=>t.a===p||t.b===p));
+  let k=S.teams.length+1;while(S.teams.some(t=>t.name===`Team ${k}`))k++;
+  S.teams.push({name:`Team ${k}`,a:free[0]||null,b:free[1]||null});
+  render();
+}
+
+function renderOrder(){
+  const o=S.ord, left=o.pending.filter(p=>!o.order.includes(p)), m=M();
+  $("orderTitle").textContent=m?`Throwing order · Table ${m.table+1} · Game ${gameNo(m)}`:"Throwing order";
+  $("orderHint").textContent=S.mode==="duo"&&!m
+    ?"One player from each team throws a toad. Tap the teams from closest to the hole to furthest away."
+    :"Each player throws one toad. Tap the players from closest to the hole to furthest away.";
+  $("pickedList").innerHTML=o.pending.map((_,i)=>o.order[i]
+    ?`<li><span class="num">${i+1}</span>${esc(o.order[i])}${i===0?' <span class="hint">throws first</span>':""}</li>`
+    :`<li class="slot"><span class="num">${i+1}</span>${i===o.order.length?"Tap the next closest":"&nbsp;"}</li>`).join("");
+  $("pickGrid").innerHTML=left.map(p=>`<button data-p="${esc(p)}">${esc(p)}</button>`).join("");
+  $("pickGrid").hidden=!left.length;
+  $("orderReset").disabled=!o.order.length;
+  $("orderGo").disabled=left.length>0;
+  $("orderBack").textContent=m?"Back to tables":"Back";
+}
+
+function renderHub(){
+  settle();assignTables();
+  const t=S.tour;
+  $("endTourConfirm").hidden=true;
+  $("champPanel").hidden=!t.champion;
+  $("tablesPanel").hidden=!!t.champion;
+  if(t.champion){$("champToad").innerHTML=TOAD;$("champName").textContent=t.champion}
+  const list=all();
+  let cards="";
+  for(let k=0;k<t.tables;k++){
+    const x=list.find(({m})=>m.table===k&&!m.winner);
+    if(!x){
+      const more=list.some(({m})=>!m.winner&&!m.bye);
+      cards+=`<div class="tcard free"><div class="tn"><span>Table ${k+1}</span><span class="pill idle">Free</span></div><div class="ti">${more?"Waiting for earlier matches to finish.":"No more matches."}</div></div>`;
+      continue;
+    }
+    const {m,ri,mi}=x, g=m.game&&!m.game.done?m.game:null;
+    cards+=`<div class="tcard"><div class="tn"><span>Table ${k+1}</span><span class="pill${g?"":" idle"}">${g?"Playing":"Ready"}</span></div>
+      <div class="tw">${esc(m.a)} v ${esc(m.b)}</div>
+      <div class="ti">${roundName(ri)} · Game ${gameNo(m)}${gameNo(m)>1?` · ${m.wa}–${m.wb}`:""}</div>
+      ${g?`<div class="live">${g.gp.map((p,i)=>`${esc(p)} ${g.rem[i]}`).join(" · ")} left</div>`:""}
+      <button class="${g?"":"primary"}" data-ri="${ri}" data-mi="${mi}">${g?"Continue":`Start game ${gameNo(m)}`}</button></div>`;
+  }
+  $("tableCards").innerHTML=cards;
+  // Collapsible: when closed, a one-line summary stands in for the cards
+  const busy=list.filter(({m})=>m.table!=null&&!m.winner), playing=busy.filter(({m})=>m.game&&!m.game.done).length;
+  const parts=[];
+  if(playing)parts.push(`${playing} playing`);
+  if(busy.length-playing)parts.push(`${busy.length-playing} ready`);
+  if(t.tables-busy.length)parts.push(`${t.tables-busy.length} free`);
+  $("tablesSummary").textContent=S.tablesCollapsed?parts.join(" · "):"";
+  $("tablesToggle").setAttribute("aria-expanded",!S.tablesCollapsed);
+  $("tablesBody").hidden=!!S.tablesCollapsed;
+  // Next to come: matches whose players are known but have no table yet. Collapsed by default.
+  const wait=list.filter(({m})=>ready(m)&&m.table==null);
+  const playingNow=new Set(busy.flatMap(({m})=>[m.a,m.b]));
+  $("nextBox").hidden=!wait.length;
+  $("nextToggle").setAttribute("aria-expanded",!!S.nextOpen);
+  $("nextList").hidden=!S.nextOpen;
+  $("nextSummary").textContent=`${wait.length} match${wait.length===1?"":"es"} · table pending`;
+  $("nextList").innerHTML=wait.map(({m,ri})=>{
+    const still=[m.a,m.b].filter(x=>playingNow.has(x));
+    return `<li><span class="nm">${esc(m.a)} v ${esc(m.b)}</span><span class="nr">${roundName(ri)}</span><span class="pill idle">${still.length?`Waiting for ${still.map(esc).join(" & ")}`:"Table pending"}</span></li>`;
+  }).join("");
+  $("bracket").innerHTML=bracketHTML();
+  $("qualiWrap").hidden=!t.quali;
+  if(t.quali)$("quali").innerHTML=qualiHTML();
+}
+
+// Qualifying standings on the chalkboard; the top K are above the dashed cut line
+function qualiHTML(){
+  const q=S.tour.quali, st=standings(), done=qualiDone();
+  const played=q.matches.filter(m=>m.winner).length;
+  const rows=st.map((r,i)=>`<tr class="${i<q.K?"in":""}${i===q.K-1?" cut":""}"><td>${i+1}</td><td class="nm">${esc(r.name)}</td><td>${r.pl}</td><td>${r.w}</td><td>${r.gw-r.gl>0?"+":""}${r.gw-r.gl}</td><td>${r.toads?r.avg.toFixed(2):"–"}</td></tr>`).join("");
+  const open=!S.qualiCollapsed;
+  const head=`<button type="button" class="qhead" id="qualiToggle" aria-expanded="${open}"><h3>Qualifying</h3><span>${done?`Complete · top ${q.K} go through`:`${played} of ${q.matches.length} matches played · top ${q.K} go through`}</span><i class="chev" aria-hidden="true"></i></button>`;
+  if(!open)return head;
+  return `${head}
+    <table class="qtab"><thead><tr><th>#</th><th class="nm">Player</th><th title="Matches played">Pl</th><th title="Matches won">W</th><th title="Games won minus lost">+/−</th><th title="Average per toad">Avg</th></tr></thead><tbody>${rows}</tbody></table>
+    <p class="qnote">Ranked by matches won, then games +/−, then average per toad, then head-to-head.</p>`;
+}
+
+function bracketHTML(){
+  const t=S.tour;
+  let h=t.rounds.map((r,ri)=>`<div class="bround"><h3>${roundName(ri)}</h3><div class="bmatches">`+r.map(m=>{
+    const live=m.table!=null&&!m.winner;
+    const line=(name,w,isB)=>{
+      if(isB&&m.bye)return `<div class="bp tbd"><span>bye</span></div>`;
+      if(!name)return `<div class="bp tbd"><span>?</span></div>`;
+      const cls=m.winner?(m.winner===name?" w":" l"):"";
+      return `<div class="bp${cls}"><span>${esc(name)}</span>${m.bye?"":`<span class="s">${w}</span>`}</div>`;
+    };
+    return `<div class="bm${live?" now":""}">${live?`<span class="tb">Table ${m.table+1}</span>`:""}${line(m.a,m.wa,false)}${line(m.b,m.wb,true)}</div>`;
+  }).join("")+`</div></div>`).join("");
+  if(t.champion)h+=`<div class="bround"><h3>Champion</h3><div class="bmatches"><div class="bm champ"><div class="bp w">${TOAD}<span>${esc(t.champion)}</span></div></div></div></div>`;
+  return `<div class="bracket">${h}</div>`;
+}
+
+function renderGame(){
+  const g=G(), r=g.rem[g.cur], m=M();
+  $("turnName").textContent=throwerOf(g,g.cur);
+  const c=coinsFor(g.hist.length,r);
+  $("turnNeed").textContent=`${g.members?g.gp[g.cur]+" · ":""}Needs ${r} · ${c} toad${c>1?"s":""} (max ${c*2}) · Round ${g.round}`;
+  $("matchInfo").hidden=!m;
+  if(m)$("matchInfo").textContent=`Table ${m.table+1} · ${roundName(S.focus.ri)} · Game ${gameNo(m)} · ${m.a} ${m.wa}–${m.wb} ${m.b}`;
+  $("quitBtn").textContent=m?"Back to tables":"End game";
+  let pad="";
+  for(let n=0;n<=c*2;n++)pad+=`<button data-s="${n}" class="${n>r?"over":""}" aria-label="Score ${n}${n>r?' (bust)':''}">${n}</button>`;
+  $("pad").innerHTML=pad;closeFinish();
+  $("undoBtn").disabled=g.hist.length===0;
+  $("board").innerHTML=columns(false);
+}
+
+function renderWin(){
+  const g=G(), L=S.last||{name:g.gp[g.rem.indexOf(0)]||g.gp[0]}, m=M();
+  $("trophy").innerHTML=TOAD;
+  $("winName").textContent=L.name;
+  $("results").innerHTML=columns(true,g.gp.indexOf(L.name));
+  $("undoWinBtn").hidden=!(S.last&&g.hist.length);
+  const A=$("againBtn"), B=$("changeBtn");
+  B.hidden=false;
+  if(!m&&g.members){
+    const [a,b]=g.members[L.name]||[];
+    $("winLabel").textContent="Winning team";
+    $("winInfo").textContent=`${a} & ${b} hit exactly 31 in round ${g.round}.`;
+    A.textContent="Play again";A.onclick=()=>askOrder(S.teams.map(t=>t.name.trim()));
+    B.textContent="Change teams";B.onclick=()=>{S.stage="setup";render()};
+    return;
+  }
+  if(!m){
+    $("winLabel").textContent="Winner";
+    $("winInfo").textContent=`Hit exactly 31 in round ${g.round}.`;
+    A.textContent="Play again";A.onclick=()=>askOrder(S.players.slice());
+    B.textContent="Change players";B.onclick=()=>{S.stage="setup";render()};
+    return;
+  }
+  const hi=Math.max(m.wa,m.wb), lo=Math.min(m.wa,m.wb);
+  if(S.tour.champion){
+    $("winLabel").textContent="Tournament champion";
+    $("winInfo").textContent=`Won the final ${hi}–${lo}.`;
+    A.textContent="See the bracket";A.onclick=goHub;
+    B.textContent="New tournament";B.onclick=startTournament;
+  }else if(m.winner&&S.focus.ri<0){
+    const q=S.tour.quali, left=q.matches.filter(x=>!x.winner).length;
+    $("winLabel").textContent="Qualifying match won";
+    $("winInfo").textContent=`Beats ${L.name===m.a?m.b:m.a} ${hi}–${lo}. `+(left?`${left} qualifying match${left===1?"":"es"} still to play. Table ${m.table+1} is free.`:`Qualifying is complete: the top ${q.K} go into the knockout.`);
+    A.textContent="Back to tables";A.onclick=goHub;
+    B.hidden=true;
+  }else if(m.winner){
+    $("winLabel").textContent="Match won";
+    $("winInfo").textContent=`Beats ${L.name===m.a?m.b:m.a} ${hi}–${lo} and goes through. Table ${m.table+1} is free.`;
+    A.textContent="Back to tables";A.onclick=goHub;
+    B.hidden=true;
+  }else{
+    $("winLabel").textContent=`Game ${m.wa+m.wb} won`;
+    $("winInfo").textContent=`${m.a} ${m.wa}–${m.wb} ${m.b}. First to 2 games wins the match.`;
+    A.textContent=`Start game ${gameNo(m)}`;A.onclick=()=>{S.last=null;askOrder([m.a,m.b])};
+    B.textContent="Back to tables";B.onclick=goHub;
+  }
+}
+
+// Chalk tally: one bar per win, every fifth bar strikes through the four before it
+function tally(n){
+  if(!n)return"";
+  let out="";
+  for(let k=0;k<Math.floor(n/5);k++)out+=`<span class="gate">||||</span>`;
+  if(n%5)out+=`<span>${"|".repeat(n%5)}</span>`;
+  return `<span class="tally" aria-label="${n} win${n>1?"s":""}">${out}</span>`;
+}
+
+// 8 or fewer left: one good turn can finish it, so ring the number in chalk
+const ringIf=n=>n>0&&n<=8?`<span class="ring" title="Can win this turn">${n}</span>`:n;
+
+// Chalkboard grid: round numbers once on the left, one column per player
+function columns(final,winner){
+  const g=G(), P=g.gp, idx=P.map((_,i)=>i);
+  const on=i=>final?i===winner:i===g.cur;
+  const cell=(i,cls,html)=>`<div class="c ${cls}${on(i)?" on":""}">${html}</div>`;
+  const byRound=idx.map(i=>{const m={};g.hist.forEach(h=>{if(h.p===i)m[h.round]=h});return m});
+  const maxR=g.hist.reduce((a,h)=>Math.max(a,h.round),0);
+  const head=i=>{
+    let h=esc(P[i])+tally(matchWins(P[i]));
+    if(g.members){const nx=throwerOf(g,i);h+=`<div class="mem">${g.members[P[i]].map(m=>`<span class="${!final&&m===nx?"next":""}">${esc(m)}</span>`).join(" · ")}</div>`}
+    return h;
+  };
+  let s=`<div class="k"></div>`+idx.map(i=>cell(i,"n",head(i))).join("");
+  s+=`<div class="k"></div>`+idx.map(i=>cell(i,"rem",ringIf(g.rem[i]))).join("");
+  s+=`<div class="k"></div>`+idx.map(i=>cell(i,"lbl","left")).join("");
+  s+=`<div class="k"></div>`+idx.map(i=>cell(i,"barc",`<div class="bar"><i style="width:${(TARGET-g.rem[i])/TARGET*100}%"></i></div>`)).join("");
+  for(let r=1;r<=maxR;r++){
+    const f=r===1?" first":"";
+    s+=`<div class="k${f}">R${r}</div>`+idx.map(i=>{
+      const h=byRound[i][r];
+      return cell(i,"cell"+f,h?`<div class="row"><span class="sc"><span class="${h.bust?"bust":""}">${h.s}</span>${TOAD}</span><b>${ringIf(h.bust?h.before:h.before-h.s)}</b></div>`:"&nbsp;");
+    }).join("");
+  }
+  if(final){
+    s+=`<div class="k" style="border-top:2px solid rgba(236,236,228,.35);padding-top:6px;line-height:1.1">Avg<br>/toad</div>`+idx.map(i=>{
+      // points per toad thrown (0–2); turns saved before toads were tracked count as 4 toads
+      const t=g.hist.filter(h=>h.p===i);
+      // busts count the points actually thrown: they don't move the score, but they show how well the toads landed
+      const pts=t.reduce((a,h)=>a+h.s,0), toads=t.reduce((a,h)=>a+(h.c||Math.min(4,h.before)),0);
+      return cell(i,"avgc",toads?(pts/toads).toFixed(2):"–");
+    }).join("");
+    // Duo: each partner's own points per toad
+    if(g.members){
+      s+=`<div class="k" style="line-height:1.1;border-top:2px solid rgba(236,236,228,.35);padding-top:6px;align-self:stretch">Each<br>player</div>`+idx.map(i=>cell(i,"pstats",g.members[P[i]].map(name=>{
+        const t=g.hist.filter(h=>h.who===name), pts=t.reduce((a,h)=>a+h.s,0), toads=t.reduce((a,h)=>a+h.c,0);
+        return `<div class="pst"><span>${esc(name)}</span><b>${toads?(pts/toads).toFixed(2):"–"}</b><small>${pts} pts · ${toads} toad${toads===1?"":"s"}</small></div>`;
+      }).join(""))).join("");
+    }
+  }
+  return `<div class="sheet" style="grid-template-columns:auto repeat(${P.length},minmax(68px,1fr))">${s}</div>`;
+}
+
+/* ---------- actions ---------- */
+function goHub(){S.last=null;S.focus=null;S.ord=null;S.stage="bracket";render()}
+function startTournament(){
+  S.tour=buildTour(S.players.slice(),S.tables,S.tourFormat);settle();goHub();
+}
+// Before every game: one toad each, closest to the hole throws first
+function askOrder(players){
+  if(players.length<2){beginGame(players);return}
+  S.ord={pending:players,order:[]};S.stage="order";render();
+}
+function pick(name){
+  const o=S.ord;o.order.push(name);
+  const left=o.pending.filter(p=>!o.order.includes(p));
+  if(left.length===1)o.order.push(left[0]);
+  render();
+}
+function beginGame(order){
+  const g=newG(order);
+  if(S.mode==="duo"&&!isTour())g.members=Object.fromEntries(S.teams.map(t=>[t.name.trim(),[t.a,t.b]]));
+  if(isTour())M().game=g;else S.g=g;
+  S.ord=null;S.last=null;S.stage="game";
+  $("msg").textContent="";$("quitConfirm").hidden=true;render();
+}
+function openMatch(ri,mi){
+  S.focus={ri,mi};const m=M();
+  if(m.game&&!m.game.done){S.stage="game";$("msg").textContent="";render()}
+  else askOrder([m.a,m.b]);
+}
+
+// Finishing can need fewer toads than the player had (e.g. 5 with 4 toads: 3 or 4 used).
+// Only then ask how many were thrown, so the per-toad average stays right.
+function askFinish(s,c){
+  const g=G(), min=Math.ceil(s/2);
+  $("finishQ").textContent=`${throwerOf(g,g.cur)} finishes on ${s}! How many toads did they throw?`;
+  let h="";for(let u=min;u<=c;u++)h+=`<button class="primary" data-u="${u}">${u} toad${u===1?"":"s"}</button>`;
+  $("finishBtns").innerHTML=h;
+  $("finishBtns").dataset.s=s;
+  $("pad").hidden=true;$("finishAsk").hidden=false;
+}
+function closeFinish(){$("pad").hidden=false;$("finishAsk").hidden=true}
+
+function score(s,used){
+  const g=G(), p=g.cur, before=g.rem[p], bust=s>before, c=coinsFor(g.hist.length,before);
+  if(!bust&&s===before&&used==null&&Math.ceil(s/2)<c){askFinish(s,c);return}
+  closeFinish();
+  const who=throwerOf(g,p), team=g.members?g.gp[p]:null;
+  g.hist.push({p,s,before,bust,round:g.round,c:used||c,who});
+  const msg=$("msg");
+  if(bust){msg.textContent=team?`Bust! ${who} goes over, ${team} stays on ${before}.`:`Bust! ${who} stays on ${before}.`;msg.className="msg bad"}
+  else{
+    g.rem[p]=before-s;
+    if(g.rem[p]===0){finishGame(g.gp[p]);return}
+    msg.textContent=(s?`${who} scores ${s}`:`${who} scores nothing`)+(team?` for ${team}.`:".");msg.className="msg good";
+  }
+  g.cur=(p+1)%g.gp.length;
+  if(g.cur===0)g.round++;
+  render();
+}
+
+function finishGame(name){
+  const g=G();g.done=true;
+  const m=M();
+  if(m){
+    if(m.games){const per={};for(const h of g.hist){const k=h.who||g.gp[h.p];per[k]=per[k]||{pts:0,toads:0};per[k].pts+=h.s;per[k].toads+=h.c||0}m.games.push(per)}
+    if(name===m.a)m.wa++;else m.wb++;
+    if(m.wa>=TO_WIN)m.winner=m.a;else if(m.wb>=TO_WIN)m.winner=m.b;
+    settle();
+  }else{const k=winKey(g,name);S.wins[k]=(S.wins[k]||0)+1}
+  S.last={name};S.stage="win";render();
+}
+
+// Take back the throw that won the game, and the win it gave
+function undoWin(){
+  const L=S.last, g=G();if(!L||!g)return;
+  const m=M();
+  if(m){m.winner=null;if(L.name===m.a)m.wa--;else m.wb--;if(m.games)m.games.pop();settle()}
+  else if(S.wins[winKey(g,L.name)])S.wins[winKey(g,L.name)]--;
+  g.done=false;S.last=null;undo();
+}
+
+function undo(){
+  const g=G(), h=g.hist.pop();if(!h)return;
+  g.rem[h.p]=h.before;g.cur=h.p;g.round=h.round;S.stage="game";
+  $("msg").textContent=`Undid ${g.gp[h.p]}'s turn.`;$("msg").className="msg";
+  render();
+}
+
+/* ---------- wiring ---------- */
+$("modeSingle").addEventListener("click",()=>{S.mode="single";render()});
+$("modeTour").addEventListener("click",()=>{S.mode="tournament";render()});
+$("fmtQuali").addEventListener("click",()=>{S.tourFormat="quali";render()});
+$("fmtByes").addEventListener("click",()=>{S.tourFormat="byes";render()});
+$("modeDuo").addEventListener("click",()=>{S.mode="duo";if(!S.teams.length&&S.players.length>=2)addTeam();else render()});
+$("addTeamBtn").addEventListener("click",addTeam);
+$("teamList").addEventListener("input",e=>{const t=e.target.closest("input.tname");if(t){S.teams[+t.dataset.t].name=t.value;save();setupStart()}});
+$("teamList").addEventListener("change",e=>{const sel=e.target.closest("select[data-slot]");if(sel){S.teams[+sel.dataset.t][sel.dataset.slot]=sel.value||null;render()}});
+$("teamList").addEventListener("click",e=>{
+  const rm=e.target.closest("button[data-rmt]"), sw=e.target.closest("button[data-swap]");
+  if(rm){S.teams.splice(+rm.dataset.rmt,1);render()}
+  if(sw){const t=S.teams[+sw.dataset.swap];[t.a,t.b]=[t.b,t.a];render()}
+});
+$("tablesMinus").addEventListener("click",()=>{S.tables=Math.max(1,S.tables-1);render()});
+$("tablesPlus").addEventListener("click",()=>{S.tables=Math.min(MAX_TABLES,S.tables+1);render()});
+$("addForm").addEventListener("submit",e=>{
+  e.preventDefault();const v=$("nameInput").value.trim();
+  if(!v)return;
+  if(S.players.includes(v)){$("nameInput").select();$("noPlayers").hidden=false;$("noPlayers").textContent=`${v} is already on the list. Use a different name.`;return}
+  S.players.push(v);$("nameInput").value="";$("nameInput").focus();render();
+});
+$("playerList").addEventListener("click",e=>{const b=e.target.closest("button[data-i]");if(b){const [nm]=S.players.splice(+b.dataset.i,1);delete S.wins[nm];render()}});
+$("shuffleBtn").addEventListener("click",()=>{const a=S.players;for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}render()});
+$("startBtn").addEventListener("click",()=>S.mode==="tournament"?startTournament():(S.tour=null,askOrder(S.mode==="duo"?S.teams.map(t=>t.name.trim()):S.players.slice())));
+$("pickGrid").addEventListener("click",e=>{const b=e.target.closest("button[data-p]");if(b)pick(b.dataset.p)});
+$("orderReset").addEventListener("click",()=>{S.ord.order=[];render()});
+$("orderGo").addEventListener("click",()=>beginGame(S.ord.order.slice()));
+$("orderBack").addEventListener("click",()=>isTour()?goHub():(S.stage="setup",render()));
+$("tableCards").addEventListener("click",e=>{const b=e.target.closest("button[data-ri]");if(b)openMatch(+b.dataset.ri,+b.dataset.mi)});
+$("quali").addEventListener("click",e=>{if(e.target.closest("#qualiToggle")){S.qualiCollapsed=!S.qualiCollapsed;render()}});
+$("nextToggle").addEventListener("click",()=>{S.nextOpen=!S.nextOpen;render()});
+$("tablesToggle").addEventListener("click",()=>{S.tablesCollapsed=!S.tablesCollapsed;render()});
+$("endTourBtn").addEventListener("click",()=>{$("endTourConfirm").hidden=false});
+$("endTourNo").addEventListener("click",()=>{$("endTourConfirm").hidden=true});
+$("endTourYes").addEventListener("click",()=>{S.tour=null;S.stage="setup";render()});
+$("champNew").addEventListener("click",startTournament);
+$("champChange").addEventListener("click",()=>{S.tour=null;S.stage="setup";render()});
+$("pad").addEventListener("click",e=>{const b=e.target.closest("button[data-s]");if(b)score(+b.dataset.s)});
+$("finishBtns").addEventListener("click",e=>{const b=e.target.closest("button[data-u]");if(b)score(+$("finishBtns").dataset.s,+b.dataset.u)});
+$("finishCancel").addEventListener("click",closeFinish);
+$("undoBtn").addEventListener("click",()=>{closeFinish();undo()});
+$("undoWinBtn").addEventListener("click",undoWin);
+// In a tournament, leaving a game keeps it on its table to carry on later
+$("quitBtn").addEventListener("click",()=>{if(M())goHub();else $("quitConfirm").hidden=false});
+$("quitNo").addEventListener("click",()=>{$("quitConfirm").hidden=true});
+$("quitYes").addEventListener("click",()=>{$("quitConfirm").hidden=true;S.stage="setup";render()});
+
+/* ---------- start, upgrading anything saved by older versions ---------- */
+load();
+if(!S.wins||typeof S.wins!=="object")S.wins={};
+if(!S.g&&Array.isArray(S.gp)&&S.gp.length)S.g={gp:S.gp,rem:S.rem,cur:S.cur||0,hist:S.hist||[],round:S.round||1,done:S.stage==="win"};
+for(const k of["gp","rem","cur","hist","round","pending","order"])delete S[k];
+if(!Array.isArray(S.teams))S.teams=[];
+if(!["tournament","duo"].includes(S.mode))S.mode="single";
+if(!(S.tables>=1))S.tables=1;
+if(S.tour&&S.tour.v!==2)S.tour=null;
+if(S.mode==="tournament"){
+  if(!S.tour)S.stage="setup";
+  else if(["game","win","order"].includes(S.stage)&&!M())S.stage="bracket";
+}
+if(["game","win"].includes(S.stage)&&!G())S.stage="setup";
+if(S.stage==="order"&&!S.ord)S.stage=isTour()?"bracket":"setup";
+render();
+</script>
+</body>
+</html>

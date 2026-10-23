@@ -1,7 +1,7 @@
 name: Deploy
 
-# test branch -> /toads31-test (automatic)
-# main branch -> /toads31 (waits for approval in the "live" environment)
+# test branch -> AWS stack toads31-test + /toads31-test (automatic)
+# main branch -> AWS stack toads31 + /toads31 (waits for approval in the "live" environment)
 # Only the toads31* folders are written. WordPress is never touched, and nothing on the server is deleted.
 on:
   push:
@@ -25,24 +25,85 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
+      - run: npm ci
       - run: npm test
 
   deploy:
     needs: test
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write  # lets GitHub sign in to AWS without stored keys (OIDC)
     environment:
       name: ${{ github.ref_name == 'main' && 'live' || 'test' }}
       url: https://brightonpubguide.co.uk/${{ github.ref_name == 'main' && 'toads31' || 'toads31-test' }}/
     env:
       FOLDER: ${{ github.ref_name == 'main' && 'toads31' || 'toads31-test' }}
+      STACK: ${{ github.ref_name == 'main' && 'toads31' || 'toads31-test' }}
+      STAGE: ${{ github.ref_name == 'main' && 'live' || 'test' }}
       # Runs started by hand on another branch only ever do a dry run
       DRY_RUN: ${{ (github.ref_name != 'test' && github.ref_name != 'main') || inputs.dry_run == true }}
     steps:
       - uses: actions/checkout@v5
 
+      # Back end: skipped until the AWS_ROLE_ARN secret exists, so the app still deploys before AWS is set up
+      - name: Check for AWS
+        id: aws
+        env:
+          AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+        run: |
+          if [ -n "$AWS_ROLE_ARN" ]; then echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else echo "enabled=false" >> "$GITHUB_OUTPUT"; echo "::notice::AWS_ROLE_ARN is not set, so the back end is skipped"; fi
+
+      # Shows which identity GitHub presents to AWS (helps if AWS refuses the role)
+      - name: Show the GitHub identity claims
+        if: steps.aws.outputs.enabled == 'true'
+        run: |
+          TOKEN=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r .value)
+          echo "$TOKEN" | cut -d. -f2 | tr '_-' '/+' | base64 -d 2>/dev/null | jq '{sub, aud, iss, repository, environment}' || true
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        if: steps.aws.outputs.enabled == 'true'
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: eu-west-2
+
+      - uses: aws-actions/setup-sam@v2
+        if: steps.aws.outputs.enabled == 'true'
+        with:
+          use-installer: true
+
+      - name: Deploy the AWS stack
+        if: steps.aws.outputs.enabled == 'true'
+        working-directory: backend
+        run: |
+          sam build
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "Dry run: changes the stack would get"
+            sam deploy --stack-name "$STACK" --parameter-overrides "Stage=$STAGE" --no-execute-changeset || true
+          else
+            sam deploy --stack-name "$STACK" --parameter-overrides "Stage=$STAGE"
+          fi
+          API_URL=$(aws cloudformation describe-stacks --stack-name "$STACK" --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text 2>/dev/null || true)
+          [ "$API_URL" = "None" ] && API_URL=""
+          echo "API address: ${API_URL:-none yet}"
+          echo "API_URL=$API_URL" >> "$GITHUB_ENV"
+
+      - name: Check the API
+        if: steps.aws.outputs.enabled == 'true' && env.DRY_RUN != 'true'
+        run: |
+          curl -fsS "$API_URL/health" && echo
+          echo "OK: $API_URL/health answers"
+          for list in players venues; do body=$(curl -fsS "$API_URL/$list"); echo "${body:0:300}"; done
+          echo "OK: players and venues answer"
+
       - name: Build
         run: |
           rm -rf dist && cp -r app dist
+          # config.js tells the app where its API is (none until the back end is set up)
+          if [ -n "$API_URL" ]; then API_JSON="\"$API_URL\""; else API_JSON=null; fi
+          printf '// Written at deploy time by .github/workflows/deploy.yml\nwindow.TOADS_CONFIG={apiUrl:%s,stage:"%s"};\n' "$API_JSON" "$STAGE" > dist/config.js
+          cat dist/config.js
           # Cache busting: every deploy gets its own ?v= on the CSS and JS links
           BUILD="${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}"
           sed -i -E "s/\?v=[0-9A-Za-z-]+/?v=${BUILD}/g" dist/index.html

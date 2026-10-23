@@ -13,4 +13,12 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
+      - run: npm ci
       - run: npm test
+
+  templates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: pip install --quiet cfn-lint
+      - run: cfn-lint backend/template.yaml aws/github-deploy-role.yaml

@@ -64,11 +64,21 @@
         <button type="button" id="tablesPlus" aria-label="More tables">+</button>
       </div>
     </div>
+    <div class="venuebox" id="venueBox" hidden>
+      <h2><label for="venueInput">Venue</label></h2>
+      <input type="text" id="venueInput" list="venueOptions" placeholder="Pub or club (optional)" maxlength="60" autocomplete="off">
+      <datalist id="venueOptions"></datalist>
+    </div>
     <h2>Players</h2>
     <form id="addForm" class="row">
       <input type="text" id="nameInput" placeholder="Player name" maxlength="24" autocomplete="off" aria-label="Player name">
       <button class="primary" type="submit">Add</button>
     </form>
+    <datalist id="playerOptions"></datalist>
+    <div class="regbox" id="regBox" hidden>
+      <p class="hint" id="regHint"></p>
+      <div class="chips" id="regChips"></div>
+    </div>
     <ul class="players" id="playerList"></ul>
     <p class="empty" id="noPlayers">Add one or more players.</p>
     <div class="teamsbox" id="teamsBox" hidden>
@@ -168,10 +178,12 @@
     <p class="hint">Avg / toad = points scored ÷ toads thrown, from 0 to 2. Busts count the points actually thrown, even though they don't change the score.</p>
     <button class="ghost" id="undoWinBtn">Undo winning throw</button>
   </section>
-  <p class="hint" style="text-align:center">Version 23 Oct 2026 · Split files</p>
+  <p class="hint" style="text-align:center">Version 23 Oct 2026 · Players and venues</p>
 </div>
 
+<script src="config.js?v=20261023"></script>
 <script src="js/rules.js?v=20261023"></script>
+<script src="js/api.js?v=20261023"></script>
 <script src="js/app.js?v=20261023"></script>
 </body>
 </html>

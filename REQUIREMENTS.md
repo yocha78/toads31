@@ -317,10 +317,11 @@ REQUIREMENTS.md      this file
   4. After the upload, flush the GoDaddy cache if the page still shows the old version label.
 - Each deploy gives the CSS and JS links a new `?v=<run>-<commit>` so phones fetch the new files. Files are uploaded with scripts first and `index.html` last. Only `toads31/` or `toads31-test/` is written and nothing is deleted.
 - Started by hand from the Actions tab, the deploy defaults to a dry run (list what would be uploaded), and on any branch other than `test` or `main` it is always a dry run. A manual "SFTP check" workflow lists the server's root folder to test the secrets.
+- **Back end in the deploy** (built 23 Oct 2026): the same job first runs `sam deploy` for `backend/template.yaml` (stack `toads31-test` or `toads31`, `Stage` = `test` or `live`). It then writes `config.js` with that stack's `ApiUrl` and checks `GET /health`. Until `AWS_ROLE_ARN` exists, the back end is skipped and `config.js` holds `apiUrl: null`.
 - `SFTP_ROOT_PATH` is `html`: the SFTP login opens in the home folder, and `html` inside it holds WordPress.
 - **Optional:** use the custom API address `api.brightonpubguide.co.uk`. It needs one DNS record in GoDaddy and a free AWS certificate.
 - **One-time setup by Lionel:**
-  - Create the AWS account, budget alert and GitHub OIDC role (step-by-step instructions to be provided).
+  - Create the AWS account, budget alert and GitHub OIDC role: see [docs/aws-setup.md](docs/aws-setup.md). The role comes from `aws/github-deploy-role.yaml`, and its ARN goes in the GitHub secret `AWS_ROLE_ARN`.
   - Create the GitHub repository.
   - Add the GoDaddy SFTP host, user, password and path as GitHub secrets.
   - Set the organiser password in AWS.

@@ -1,0 +1,92 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Toads 31 back end (one stack per stage, test and live)
+
+Parameters:
+  Stage:
+    Type: String
+    AllowedValues: [test, live]
+  AllowedOrigin:
+    Type: String
+    Default: https://brightonpubguide.co.uk
+    Description: The only website allowed to call the API from a browser
+
+Conditions:
+  IsLive: !Equals [!Ref Stage, live]
+
+Globals:
+  Function:
+    Runtime: nodejs22.x
+    Architectures: [arm64]
+    MemorySize: 256
+    Timeout: 10
+    Environment:
+      Variables:
+        TABLE_NAME: !Ref Table
+        STAGE: !Ref Stage
+        ALLOWED_ORIGIN: !Ref AllowedOrigin
+
+Resources:
+  # Single table for players, venues, games, turns and tournaments (REQUIREMENTS 4.7)
+  Table:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: !If [IsLive, true, false]
+      SSESpecification:
+        SSEEnabled: true
+
+  Api:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      CorsConfiguration:
+        AllowOrigins: [!Ref AllowedOrigin]
+        AllowMethods: [GET, POST, PATCH, DELETE, OPTIONS]
+        AllowHeaders: [content-type, authorization]
+        MaxAge: 600
+      # Abuse protection: pub scale is a few requests a second
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 50
+        ThrottlingRateLimit: 20
+
+  HealthFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: health.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref Table
+      Events:
+        Get:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref Api
+            Path: /health
+            Method: GET
+
+  HealthLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${HealthFunction}
+      RetentionInDays: 14
+
+Outputs:
+  ApiUrl:
+    Description: Base address of the API, written into the app's config.js
+    Value: !Sub https://${Api}.execute-api.${AWS::Region}.amazonaws.com
+  TableName:
+    Value: !Ref Table

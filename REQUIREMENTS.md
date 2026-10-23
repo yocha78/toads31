@@ -232,6 +232,7 @@ The browser must **never** hold AWS credentials or talk to DynamoDB directly.
 - Stats can be filtered by venue, e.g. "Al's average at The Lewes Arms". A venue list also suits a future link-up with the Brighton Pub Guide.
 - **Each turn stores:** game, turn index, round, thrower, team (Duo), score, toads thrown, bust flag, points left before the turn, and timestamp.
 - Undo removes the last stored turn.
+- **Built so far (step 5, Oct 2026):** a finished Single or Duo game is sent whole to `POST /games`, with every turn and its time, the venue and the phone's game id (so a resend is saved once). It waits on the screen while "Undo winning throw" is still possible and is sent when the players play again or change players. With no signal, finished games wait on the phone ("Offline: n games waiting to send") and go when the connection returns. The API replays the scores from 31 and refuses a game that doesn't add up, links registered players and the venue, and writes a summary per registered player for the stats in step 6. Local tournaments are not saved; centralised tournaments (step 7) will save turn by turn.
 
 ### 4.5 Centralised tournaments
 - **Create (organiser only):** name, venue, players (from the list, guests allowed), draw order (list / shuffle), number of tables and a **scoring PIN**.

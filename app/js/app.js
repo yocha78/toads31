@@ -43,6 +43,7 @@ function render(){
   if(!v){S.stage="setup";return render()}
   $(v[0]).hidden=false;v[1]();
   save();
+  if(NET.on)syncGames();
 }
 
 function renderSetup(){
@@ -92,6 +93,7 @@ function setupStart(){
 /* ---------- online: shared players and venues, only when config.js gives an API ---------- */
 // Without an API none of this shows and the app works exactly as before.
 const NET={on:ToadsApi.enabled,players:ToadsApi.cached("players"),venues:ToadsApi.cached("venues"),fresh:false,saving:{},note:""};
+const newId=()=>crypto.randomUUID?crypto.randomUUID():"10000000-1000-4000-8000-100000000000".replace(/[018]/g,c=>(c^crypto.getRandomValues(new Uint8Array(1))[0]&15>>c/4).toString(16));
 const nameKey=n=>String(n).normalize("NFC").toLocaleLowerCase("en-GB");
 const findIn=(list,n)=>list.find(x=>nameKey(x.name)===nameKey(n));
 const byName=(a,b)=>a.name.localeCompare(b.name,"en-GB",{sensitivity:"base"});
@@ -132,6 +134,22 @@ async function registerPlayer(p){
     NET.note=r.created?`${r.item.name} is registered.`:`${r.item.name} was already registered.`;
   }else NET.note=r.offline?`No signal, so ${p} stays a guest. Try Register again later.`:`Couldn't register ${p}: ${r.error}.`;
   if(S.stage==="setup")render();
+}
+// Saved games: a finished Single or Duo game is queued, then sent once it can no longer be undone
+const heldGame=()=>S.stage==="win"&&S.last&&!M()&&G()&&G().id||null;
+async function syncGames(){
+  const r=await ToadsApi.flush(heldGame());
+  if(r){NET.sync=r;if(r.sent)NET.saved=Date.now()}
+  syncNote();
+}
+function syncNote(){
+  const q=ToadsApi.queued(), held=heldGame(), waiting=q.filter(x=>x.id!==held).length, r=NET.sync||{};
+  const plural=n=>`${n} game${n===1?"":"s"}`;
+  $("syncNote").textContent=waiting&&r.failed?`Offline: ${plural(waiting)} waiting to send.`
+    :waiting?`Sending ${plural(waiting)}…`
+    :held&&q.some(x=>x.id===held)?"This game is saved to the shared scores when you play again or change players."
+    :NET.saved&&Date.now()-NET.saved<8000?"Game saved.":"";
+  $("syncNote").hidden=!$("syncNote").textContent;
 }
 function rememberVenue(){
   const v=$("venueInput").value.replace(/\s+/g," ").trim(), known=v&&findIn(NET.venues,v);
@@ -412,6 +430,8 @@ function pick(name){
 function beginGame(order){
   const g=newG(order);
   if(S.mode==="duo"&&!isTour())g.members=Object.fromEntries(S.teams.map(t=>[t.name.trim(),[t.a,t.b]]));
+  // Online, Single and Duo games are saved: they get an id, a start time and the venue
+  if(NET.on&&!isTour()){g.id=newId();g.started=Date.now();g.venue=S.venue||null}
   if(isTour())M().game=g;else S.g=g;
   S.ord=null;S.last=null;S.stage="game";
   $("msg").textContent="";$("quitConfirm").hidden=true;render();
@@ -436,6 +456,7 @@ function closeFinish(){$("pad").hidden=false;$("finishAsk").hidden=true}
 function score(s,used){
   const g=G(), t=Toads.playTurn(g,s,used);
   if(t.ask){askFinish(s,t.ask);return}
+  if(g.id)g.hist[g.hist.length-1].at=Date.now();
   closeFinish();
   const {who,team,before}=t, msg=$("msg");
   if(t.won){finishGame(g.gp[t.p]);return}
@@ -449,6 +470,7 @@ function finishGame(name){
   const m=M();
   if(m)Toads.recordGameWin(S.tour,m,g,name);
   else{const k=winKey(g,name);S.wins[k]=(S.wins[k]||0)+1}
+  if(g.id&&!m)ToadsApi.enqueue(Toads.gameRecord(g,{id:g.id,mode:g.members?"duo":"single",venue:g.venue,started:g.started,finished:Date.now()}));
   S.last={name};S.stage="win";render();
 }
 
@@ -458,6 +480,7 @@ function undoWin(){
   const m=M();
   if(m)Toads.undoGameWin(S.tour,m,L.name);
   else if(S.wins[winKey(g,L.name)])S.wins[winKey(g,L.name)]--;
+  if(g.id)ToadsApi.unqueue(g.id);
   g.done=false;S.last=null;undo();
 }
 
@@ -541,4 +564,8 @@ if(S.mode==="tournament"){
 if(["game","win"].includes(S.stage)&&!G())S.stage="setup";
 if(S.stage==="order"&&!S.ord)S.stage=isTour()?"bracket":"setup";
 render();
-if(NET.on)loadDirectory();
+if(NET.on){
+  loadDirectory();
+  window.addEventListener("online",syncGames);
+  setInterval(()=>{if(ToadsApi.queued().length)syncGames();else syncNote()},30000);
+}

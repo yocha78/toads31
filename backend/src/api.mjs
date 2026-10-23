@@ -3,6 +3,7 @@ import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { json, readBody } from "./lib/http.mjs";
 import { listAll, add } from "./lib/directory.mjs";
+import { saveGame, getGame } from "./lib/games.mjs";
 
 const defaultDb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
@@ -12,6 +13,17 @@ export function makeHandler(db = defaultDb, table = process.env.TABLE_NAME) {
     "POST /players": e => create("players", e),
     "GET /venues": () => list("venues"),
     "POST /venues": e => create("venues", e),
+    "POST /games": async e => {
+      const body = readBody(e);
+      if (!body) return json(400, { error: "body must be a JSON object" });
+      const r = await saveGame(db, table, body);
+      if (r.status === "invalid") return json(400, { error: r.error });
+      return json(r.status === "created" ? 201 : 200, { game: r.game });
+    },
+    "GET /games/{id}": async e => {
+      const game = await getGame(db, table, (e.pathParameters || {}).id);
+      return game ? json(200, { game }) : json(404, { error: "no such game" });
+    },
   };
   async function list(kind) {
     return json(200, { [kind]: await listAll(db, table, kind) });

@@ -1,0 +1,7 @@
+# Toads 31: ask browsers and caches to check for a new page and version.json on every visit.
+# CSS and JS links carry ?v=<build>, so they can be cached as long as they like.
+<IfModule mod_headers.c>
+  <FilesMatch "\.(html|json)$">
+    Header set Cache-Control "no-cache, must-revalidate"
+  </FilesMatch>
+</IfModule>

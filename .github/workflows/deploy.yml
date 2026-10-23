@@ -107,6 +107,10 @@ jobs:
           # Cache busting: every deploy gets its own ?v= on the CSS and JS links
           BUILD="${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}"
           sed -i -E "s/\?v=[0-9A-Za-z-]+/?v=${BUILD}/g" dist/index.html
+          # The page reloads itself when version.json names a newer build than its own (see index.html)
+          sed -i -E "s/(name=\"toads-build\" content=\")dev\"/\1${BUILD}\"/" dist/index.html
+          printf '{"build":"%s"}\n' "$BUILD" > dist/version.json
+          grep -o 'toads-build" content="[^"]*"' dist/index.html
           echo "BUILD=$BUILD" >> "$GITHUB_ENV"
           grep -o '?v=[^"]*' dist/index.html
 

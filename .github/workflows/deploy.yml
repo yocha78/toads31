@@ -21,8 +21,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
       - run: npm test
@@ -38,7 +38,7 @@ jobs:
       # Branches other than test and main only ever do a dry run
       DRY_RUN: ${{ (github.ref_name != 'test' && github.ref_name != 'main') || inputs.dry_run == true }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Build
         run: |
@@ -74,7 +74,7 @@ jobs:
           cd "$TARGET"
           mirror -R --verbose $DRY --exclude-glob index.html dist/ ./
           $PUT_INDEX
-          cls -l index.html
+          cls -l
           LFTP
           lftp -f upload.lftp
 

@@ -25,6 +25,7 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
+      - run: npm ci
       - run: npm test
 
   deploy:
@@ -93,6 +94,8 @@ jobs:
         run: |
           curl -fsS "$API_URL/health" && echo
           echo "OK: $API_URL/health answers"
+          for list in players venues; do body=$(curl -fsS "$API_URL/$list"); echo "${body:0:300}"; done
+          echo "OK: players and venues answer"
 
       - name: Build
         run: |

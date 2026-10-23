@@ -206,3 +206,10 @@ ul.players li:last-child{border-bottom:0}
 .pickgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}
 .pickgrid button{font-weight:700;overflow-wrap:anywhere}
 @media (prefers-reduced-motion:no-preference){.bar i{transition:width .3s ease}}
+/* online only: venue, registered players to tap, guest tags */
+.venuebox,.regbox{display:flex;flex-direction:column;gap:8px}
+.regbox .hint{margin:0}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips button{padding:8px 12px;border-radius:999px}
+.tag{font-size:.75rem;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:1px 8px;margin-left:6px;white-space:nowrap}
+.x.reg{color:var(--brass)}

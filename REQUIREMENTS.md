@@ -216,6 +216,7 @@ The browser must **never** hold AWS credentials or talk to DynamoDB directly.
   - List, add and rename players.
   - Delete a player, which also deletes their data (privacy).
 - Setup screens (Single, Duo, Tournament) pick players from this shared list instead of typing names.
+- **Built so far (step 4, Oct 2026):** `GET/POST /players` and `/venues`. On the setup screen, registered players appear as buttons to tap (filtered by what is typed), a typed name that matches a registered player takes its spelling, and any other name is a guest with a **Register** button. The venue field offers known venues and remembers the last one; a new venue is added to the shared list when it is entered. Both lists are kept on the phone, so setup still works with no signal. Rename, merge and delete wait for the organiser login (step 6). With no API configured, the setup screen is exactly as in Phase 1.
 - **Guests are allowed.** A name can be typed without registering. Guests play and appear on the scoresheet as normal, and the game is still saved, but guests get no stats page. Later, a guest in a saved game can be linked to a registered player (organiser), which adds those games to that player's stats.
 - **Stats page per player:**
   - Games played and won.

@@ -63,10 +63,11 @@ function renderSetup(){
   $("tablesVal").textContent=S.tables;
   $("tablesMinus").disabled=S.tables<=1;
   $("tablesPlus").disabled=S.tables>=MAX_TABLES;
-  $("playerList").innerHTML=S.players.map((p,i)=>`<li><span class="num">${i+1}</span><span class="pname">${esc(p)}</span><button class="x" data-i="${i}" aria-label="Remove ${esc(p)}">Remove</button></li>`).join("");
+  $("playerList").innerHTML=S.players.map((p,i)=>`<li><span class="num">${i+1}</span><span class="pname">${esc(p)}${guestTag(p)}</span>${regBtn(p,i)}<button class="x" data-i="${i}" aria-label="Remove ${esc(p)}">Remove</button></li>`).join("");
   $("noPlayers").hidden=n>0;
   $("noPlayers").textContent=T?"Add at least two players.":D?"Add players, then put them into teams of two below.":"Add one or more players.";
   $("shuffleBtn").hidden=!(T&&n>2);
+  if(NET.on)renderOnline();
   setupStart();
 }
 function tourHint(n){
@@ -85,6 +86,55 @@ function setupStart(){
   $("startBtn").disabled=T?n<2:D?!!teamProblem():n===0;
   $("startBtn").textContent=T?"Start tournament":D?"Start duo game":n===1?"Start solo game":"Start game";
   if(D)$("teamHint").textContent=teamProblem()||"Ready. The partner chosen as 1st throws on the team's first turn.";
+}
+
+/* ---------- online: shared players and venues, only when config.js gives an API ---------- */
+// Without an API none of this shows and the app works exactly as before.
+const NET={on:ToadsApi.enabled,players:ToadsApi.cached("players"),venues:ToadsApi.cached("venues"),fresh:false,saving:{},note:""};
+const nameKey=n=>String(n).normalize("NFC").toLocaleLowerCase("en-GB");
+const findIn=(list,n)=>list.find(x=>nameKey(x.name)===nameKey(n));
+const byName=(a,b)=>a.name.localeCompare(b.name,"en-GB",{sensitivity:"base"});
+const guestTag=p=>NET.on&&!findIn(NET.players,p)?`<span class="tag">guest</span>`:"";
+const regBtn=(p,i)=>NET.on&&!findIn(NET.players,p)?`<button class="x reg" data-reg="${i}"${NET.saving[p]?" disabled":""} aria-label="Register ${esc(p)} as a player">${NET.saving[p]?"Saving…":"Register"}</button>`:"";
+async function loadDirectory(){
+  const [pl,vn]=await Promise.all([ToadsApi.list("players"),ToadsApi.list("venues")]);
+  NET.players=pl.items;NET.venues=vn.items;NET.fresh=pl.fresh&&vn.fresh;
+  if(S.stage==="setup")render();
+}
+function renderOnline(){
+  $("venueBox").hidden=false;
+  if(document.activeElement!==$("venueInput"))$("venueInput").value=S.venue||"";
+  $("venueOptions").innerHTML=NET.venues.slice().sort(byName).map(v=>`<option value="${esc(v.name)}">${v.area?esc(v.area):""}</option>`).join("");
+  $("nameInput").setAttribute("list","playerOptions");
+  const free=NET.players.filter(p=>!S.players.some(x=>nameKey(x)===nameKey(p.name))).sort(byName);
+  $("playerOptions").innerHTML=free.map(p=>`<option value="${esc(p.name)}"></option>`).join("");
+  // Tap to add: registered players matching what is typed, at most 12
+  const q=nameKey($("nameInput").value.trim()), shown=free.filter(p=>!q||nameKey(p.name).includes(q)).slice(0,12);
+  $("regBox").hidden=false;
+  $("regChips").innerHTML=shown.map(p=>`<button type="button" data-add="${esc(p.name)}">${esc(p.name)}</button>`).join("");
+  $("regHint").textContent=NET.note||(!NET.players.length?(NET.fresh?"No registered players yet. Add a name, then tap Register to keep it for next time.":"Can't reach the players list. Names you add are guests for now."):
+    (shown.length?"Tap a registered player to add them.":q?"No registered player matches. Add them as a guest.":"Every registered player is in.")+(NET.fresh?"":" (Offline: last saved list.)"));
+}
+async function registerPlayer(p){
+  NET.saving[p]=true;NET.note="";render();
+  const r=await ToadsApi.add("players",{name:p});
+  delete NET.saving[p];
+  if(r.item){
+    NET.players=NET.players.filter(x=>x.id!==r.item.id).concat([r.item]);
+    // Already registered with other capitals: use that spelling everywhere
+    if(r.item.name!==p&&!S.players.includes(r.item.name)){
+      S.players=S.players.map(x=>x===p?r.item.name:x);
+      S.teams.forEach(t=>{if(t.a===p)t.a=r.item.name;if(t.b===p)t.b=r.item.name});
+      if(S.wins[p]!=null){S.wins[r.item.name]=S.wins[p];delete S.wins[p]}
+    }
+    NET.note=r.created?`${r.item.name} is registered.`:`${r.item.name} was already registered.`;
+  }else NET.note=r.offline?`No signal, so ${p} stays a guest. Try Register again later.`:`Couldn't register ${p}: ${r.error}.`;
+  if(S.stage==="setup")render();
+}
+function rememberVenue(){
+  const v=$("venueInput").value.replace(/\s+/g," ").trim(), known=v&&findIn(NET.venues,v);
+  S.venue=known?known.name:v;save();
+  if(v&&!known&&NET.on)ToadsApi.add("venues",{name:v}).then(r=>{if(r.item)NET.venues=NET.venues.filter(x=>x.id!==r.item.id).concat([r.item])});
 }
 
 /* ---------- duo teams ---------- */
@@ -422,12 +472,20 @@ $("teamList").addEventListener("click",e=>{
 $("tablesMinus").addEventListener("click",()=>{S.tables=Math.max(1,S.tables-1);render()});
 $("tablesPlus").addEventListener("click",()=>{S.tables=Math.min(MAX_TABLES,S.tables+1);render()});
 $("addForm").addEventListener("submit",e=>{
-  e.preventDefault();const v=$("nameInput").value.trim();
+  e.preventDefault();let v=$("nameInput").value.trim();
   if(!v)return;
+  if(NET.on){const r=findIn(NET.players,v);if(r)v=r.name}
   if(S.players.includes(v)){$("nameInput").select();$("noPlayers").hidden=false;$("noPlayers").textContent=`${v} is already on the list. Use a different name.`;return}
   S.players.push(v);$("nameInput").value="";$("nameInput").focus();render();
 });
-$("playerList").addEventListener("click",e=>{const b=e.target.closest("button[data-i]");if(b){const [nm]=S.players.splice(+b.dataset.i,1);delete S.wins[nm];render()}});
+$("playerList").addEventListener("click",e=>{
+  const r=e.target.closest("button[data-reg]");if(r){registerPlayer(S.players[+r.dataset.reg]);return}
+  const b=e.target.closest("button[data-i]");if(b){const [nm]=S.players.splice(+b.dataset.i,1);delete S.wins[nm];render()}});
+if(NET.on){
+  $("regChips").addEventListener("click",e=>{const b=e.target.closest("button[data-add]");if(b&&!S.players.includes(b.dataset.add)){S.players.push(b.dataset.add);$("nameInput").value="";NET.note="";render()}});
+  $("nameInput").addEventListener("input",()=>renderOnline());
+  $("venueInput").addEventListener("change",rememberVenue);
+}
 $("shuffleBtn").addEventListener("click",()=>{const a=S.players;for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}render()});
 $("startBtn").addEventListener("click",()=>S.mode==="tournament"?startTournament():(S.tour=null,askOrder(S.mode==="duo"?S.teams.map(t=>t.name.trim()):S.players.slice())));
 $("pickGrid").addEventListener("click",e=>{const b=e.target.closest("button[data-p]");if(b)pick(b.dataset.p)});
@@ -469,3 +527,4 @@ if(S.mode==="tournament"){
 if(["game","win"].includes(S.stage)&&!G())S.stage="setup";
 if(S.stage==="order"&&!S.ord)S.stage=isTour()?"bracket":"setup";
 render();
+if(NET.on)loadDirectory();

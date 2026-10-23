@@ -1,0 +1,8 @@
+{
+  "name": "toads31",
+  "private": true,
+  "description": "Toads 31: Toad in the Hole scorer",
+  "scripts": {
+    "test": "node --test tests/*.test.js"
+  }
+}

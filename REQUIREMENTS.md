@@ -61,7 +61,7 @@ Scoring web app for **Toad in the Hole**, the Sussex pub game, at `https://brigh
 
 ## 3. Phase 1 — current app (built)
 
-One self-contained `index.html` with no back end. State is kept in the browser's `localStorage` under the key `toads31`, and survives reloads.
+A static app in `app/` with no back end: `index.html`, `css/app.css`, `js/rules.js` (the game rules, pure functions with automated tests in `tests/`) and `js/app.js` (screens and buttons). State is kept in the browser's `localStorage` under the key `toads31`, and survives reloads.
 
 ### 3.1 Modes (switch on the start screen)
 
@@ -177,7 +177,7 @@ One self-contained `index.html` with no back end. State is kept in the browser's
 - **Version label:** a small label at the bottom, e.g. "Version 22 Oct 2026 · Next to come". Update it on every release so the live version can be checked at a glance.
 
 ### 3.6 Hosting today
-- The file is uploaded by hand as `public_html/toads31/index.html` on GoDaddy. It sits next to WordPress; real folders bypass WordPress routing.
+- The contents of `app/` (`index.html` plus the `css/` and `js/` folders) are uploaded by hand into `public_html/toads31/` on GoDaddy, until the Phase 2 deploy workflow takes over. It sits next to WordPress; real folders bypass WordPress routing.
 - **Known pitfalls:**
   - Downloaded copies get renamed (e.g. `index (3).html`).
   - Server or browser caching.

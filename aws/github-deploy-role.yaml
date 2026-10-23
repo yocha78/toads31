@@ -1,0 +1,107 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Lets GitHub Actions in yocha78/toads31 deploy the Toads 31 back end without stored AWS keys (OIDC).
+  Create this stack once, in eu-west-2, from the CloudFormation console. Copy the RoleArn output
+  into the GitHub secret AWS_ROLE_ARN.
+
+Parameters:
+  GitHubRepo:
+    Type: String
+    Default: yocha78/toads31
+  CreateOidcProvider:
+    Type: String
+    AllowedValues: ["yes", "no"]
+    Default: "yes"
+    Description: Choose "no" only if this AWS account already has the token.actions.githubusercontent.com identity provider
+
+Conditions:
+  MakeProvider: !Equals [!Ref CreateOidcProvider, "yes"]
+
+Resources:
+  GitHubOidc:
+    Type: AWS::IAM::OIDCProvider
+    Condition: MakeProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList: [sts.amazonaws.com]
+
+  DeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: toads31-github-deploy
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Sub arn:aws:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+              # Only the deploy jobs of this repository's test and live environments
+              StringLike:
+                token.actions.githubusercontent.com:sub:
+                  - !Sub repo:${GitHubRepo}:environment:test
+                  - !Sub repo:${GitHubRepo}:environment:live
+      Policies:
+        - PolicyName: toads31-sam-deploy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              # The toads31 stacks, and the bucket stack SAM creates for uploads
+              - Effect: Allow
+                Action: cloudformation:*
+                Resource:
+                  - !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/toads31*
+                  - !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/aws-sam-cli-managed-default/*
+                  - !Sub arn:aws:cloudformation:${AWS::Region}:aws:transform/Serverless-2016-10-31
+              - Effect: Allow
+                Action: [cloudformation:ValidateTemplate, cloudformation:GetTemplateSummary, cloudformation:ListStacks]
+                Resource: "*"
+              - Effect: Allow
+                Action: s3:*
+                Resource:
+                  - arn:aws:s3:::aws-sam-cli-managed-default-*
+                  - arn:aws:s3:::aws-sam-cli-managed-default-*/*
+              - Effect: Allow
+                Action: lambda:*
+                Resource: !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:toads31*
+              - Effect: Allow
+                Action: dynamodb:*
+                Resource: !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/toads31*
+              - Effect: Allow
+                Action: apigateway:*
+                Resource: !Sub arn:aws:apigateway:${AWS::Region}::/*
+              - Effect: Allow
+                Action: logs:*
+                Resource: !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/toads31*
+              - Effect: Allow
+                Action: [logs:DescribeLogGroups]
+                Resource: "*"
+              # Roles for the Lambda functions SAM creates, and nothing else
+              - Effect: Allow
+                Action:
+                  - iam:CreateRole
+                  - iam:DeleteRole
+                  - iam:GetRole
+                  - iam:UpdateRole
+                  - iam:TagRole
+                  - iam:UntagRole
+                  - iam:PutRolePolicy
+                  - iam:DeleteRolePolicy
+                  - iam:GetRolePolicy
+                  - iam:AttachRolePolicy
+                  - iam:DetachRolePolicy
+                  - iam:PassRole
+                Resource: !Sub arn:aws:iam::${AWS::AccountId}:role/toads31*
+              # Read the organiser password later (step 6)
+              - Effect: Allow
+                Action: [ssm:GetParameter, ssm:GetParameters]
+                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/toads31/*
+
+Outputs:
+  RoleArn:
+    Description: Paste this into the GitHub secret AWS_ROLE_ARN
+    Value: !GetAtt DeployRole.Arn

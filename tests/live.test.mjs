@@ -201,6 +201,7 @@ test("tournaments: two tables score at once, games reach the players' stats, an 
   assert.equal(stats.totals.played, 2);
   assert.equal(stats.totals.won, 2);
   assert.equal(stats.venues[0].name, "Dover Castle");
+  assert.deepEqual(stats.tournaments.map(x => [x.name, x.played, x.won]), [["Friday cup", 2, 2]]);
   const games = (await call(h, "GET /games")).body.games;
   assert.equal(games.length, 4);
   assert.ok(games.every(g => g.tournament && g.tournament.name === "Friday cup"));

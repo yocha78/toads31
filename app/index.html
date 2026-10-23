@@ -10,6 +10,20 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Atkinson+Hyperlegible:wght@400;700&family=Cabin+Sketch:wght@400;700&family=Patrick+Hand&display=swap">
 <link rel="stylesheet" href="css/app.css?v=20261023">
 <meta name="toads-qr" content="js/vendor/qrcode.js?v=20261023">
+<meta name="toads-build" content="dev">
+<script>
+// After a deploy, the website's cache can keep handing out the old page. version.json is always fetched fresh:
+// when it names a newer build than this page, reload as ?v=<build>, an address no cache has seen yet.
+(function(){
+  var b=document.querySelector('meta[name="toads-build"]').content;
+  if(b==="dev"||!window.fetch)return;
+  fetch("version.json?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.json():null}).then(function(v){
+    if(!v||!v.build||v.build===b)return;
+    try{if(sessionStorage.getItem("toads31.reloaded")===v.build)return;sessionStorage.setItem("toads31.reloaded",v.build)}catch(e){return}
+    location.replace(location.pathname+"?v="+encodeURIComponent(v.build)+location.hash);
+  }).catch(function(){});
+})();
+</script>
 </head>
 <body>
 <div class="wrap">
@@ -269,7 +283,7 @@
     <button class="ghost" id="undoWinBtn">Undo winning throw</button>
   </section>
   <p class="hint" id="syncNote" style="text-align:center" aria-live="polite" hidden></p>
-  <p class="hint" style="text-align:center">Version 23 Oct 2026 · Live tournaments</p>
+  <p class="hint" style="text-align:center">Version 23 Oct 2026 · Auto update</p>
 </div>
 
 <script src="config.js?v=20261023"></script>

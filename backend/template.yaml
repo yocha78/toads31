@@ -78,6 +78,34 @@ Resources:
             Path: /health
             Method: GET
 
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: api.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref Table
+      Events:
+        ListPlayers:
+          Type: HttpApi
+          Properties: {ApiId: !Ref Api, Path: /players, Method: GET}
+        AddPlayer:
+          Type: HttpApi
+          Properties: {ApiId: !Ref Api, Path: /players, Method: POST}
+        ListVenues:
+          Type: HttpApi
+          Properties: {ApiId: !Ref Api, Path: /venues, Method: GET}
+        AddVenue:
+          Type: HttpApi
+          Properties: {ApiId: !Ref Api, Path: /venues, Method: POST}
+
+  ApiLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${ApiFunction}
+      RetentionInDays: 14
+
   HealthLogs:
     Type: AWS::Logs::LogGroup
     Properties:

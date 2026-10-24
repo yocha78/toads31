@@ -835,7 +835,7 @@ function renderWin(){
   }else{
     $("winLabel").textContent=`Game ${m.wa+m.wb} won`;
     $("winInfo").textContent=`${m.a} ${m.wa}–${m.wb} ${m.b}. First to 2 games wins the match.`;
-    A.textContent=`Start game ${gameNo(m)}`;A.onclick=()=>{S.last=null;askOrder([m.a,m.b])};
+    A.textContent=`Start game ${gameNo(m)}`;A.onclick=()=>{S.last=null;nextMatchGame(m)};
     B.textContent="Back to tables";B.onclick=goHub;
   }
 }
@@ -925,7 +925,18 @@ function openMatch(ri,mi){
   S.focus={ri,mi};const m=M();
   if(m.game&&!m.game.done){S.stage="game";$("msg").textContent="";render()}
   else if(S.live&&(!myTable(m.table)||S.live.status==="ended"))goHub();
-  else askOrder([m.a,m.b]);
+  else nextMatchGame(m);
+}
+// A match's next game: game 2 swaps game 1's throwing order (no picking); game 1 and game 3 ask for it
+function nextMatchGame(m){
+  const prev=m.game;
+  if(gameNo(m)===2&&prev&&prev.done&&prev.gp.length===2){
+    const order=prev.gp.slice().reverse();
+    beginGame(order);
+    if(S.stage==="game"){$("msg").textContent=`Game 2: order swapped, ${order[0]} throws first.`;$("msg").className="msg good"}
+    return;
+  }
+  askOrder([m.a,m.b]);
 }
 
 // Finishing can need fewer toads than the player had (e.g. 5 with 4 toads: 3 or 4 used).

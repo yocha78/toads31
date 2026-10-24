@@ -346,10 +346,13 @@ function renderTV(){
   $("tvNextHead").hidden=!next.length;
   $("tvNext").innerHTML=next.map(({m,ri})=>`<li><span>${esc(m.a)} v ${esc(m.b)}</span><i>${roundName(ri)}</i></li>`).join("")+(waiting.length>6?`<li><i>and ${waiting.length-6} more</i></li>`:"");
   $("tvChamp").innerHTML=t.champion?`<div class="tvchamp">${TOAD}<div><span>Champion</span><b>${esc(t.champion)}</b></div></div>`:"";
-  // While qualifying is on, its table fills the board; the knockout appears once it is complete
-  const quali=t.quali&&!qualiDone();
+  // While qualifying is on, its table fills the board; the knockout appears once it is complete,
+  // and a small button switches back to the final qualifying table (T.showQuali)
+  const done=!!t.quali&&qualiDone(), quali=t.quali&&(!done||T.showQuali);
+  $("tvSwitch").hidden=!done;
+  $("tvSwitch").textContent=quali?"Show the knockout":"Show qualifying";
   $("tvQuali").innerHTML=quali?qualiHTML(true):"";
-  $("tvBracket").innerHTML=quali?`<p class="tvlater">Then the top ${t.quali.K} play a knockout: ${t.rounds.map((_,ri)=>roundName(ri).toLowerCase()).join(", ")}.</p>`:bracketHTML();
+  $("tvBracket").innerHTML=quali?`<p class="tvlater">${done?`Qualifying is complete: the top ${t.quali.K} play the knockout,`:`Then the top ${t.quali.K} play a knockout:`} ${t.rounds.map((_,ri)=>roundName(ri).toLowerCase()).join(", ")}.</p>`:bracketHTML();
   fitTV();
 }
 // Everything stays on one screen: shrink the text of a side until it fits (no scrolling on a TV)
@@ -1187,6 +1190,7 @@ if(NET.on){
   };
   openHash();window.addEventListener("hashchange",openHash);
   if(S.live&&!liveHash()&&!TV)setHash(S.live.id);
+  $("tvSwitch").addEventListener("click",()=>{if(TV){TV.showQuali=!TV.showQuali;render()}});
   $("tvExit").addEventListener("click",()=>{try{history.replaceState(null,"",location.pathname+location.search)}catch(e){}closeTV()});
   document.addEventListener("visibilitychange",()=>{if(TV&&document.visibilityState==="visible"){keepAwake();tvFetch(false)}});
   setInterval(()=>{if(S.live&&document.visibilityState==="visible"){if(S.live.queue.length)liveFlush();else liveFetch(false)}},LIVE_POLL);

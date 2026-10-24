@@ -153,3 +153,10 @@ jobs:
           else
             echo "::warning::$URL does not show build $BUILD yet. Flush the GoDaddy cache and check again."
           fi
+          # The plain address is what people open. GoDaddy's CDN (Cloudflare) may still hand out an older copy;
+          # a copy from 23 Oct 2026 or later reloads itself (version.json), an older one needs the cache flushed once.
+          PLAIN="https://brightonpubguide.co.uk/$FOLDER/"
+          GOT=$(curl -fsSL "$PLAIN" | grep -o 'toads-build" content="[^"]*"' | cut -d'"' -f3 || true)
+          if [ "$GOT" = "$BUILD" ]; then echo "OK: $PLAIN serves build $BUILD"
+          elif [ -n "$GOT" ]; then echo "OK: $PLAIN still has build $GOT cached here; it reloads itself to $BUILD when opened"
+          else echo "::warning::$PLAIN still serves a page from before automatic updates. Flush the GoDaddy cache once (Managed WordPress, Settings, Flush cache)."; fi

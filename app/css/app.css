@@ -274,6 +274,8 @@ a.btn:focus-visible{outline:3px solid var(--brass);outline-offset:2px}
 .tourcard .ti{color:var(--muted);font-size:.85rem}
 .tourcard .tclaim{margin-top:0;font-size:.9rem}
 .tourcard .tclaim .link{font-size:.9rem;padding:4px 0}
+.plan{display:flex;flex-direction:column;gap:2px;font-size:.85rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.plan b{color:var(--ink)}
 .touredit{display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--line);padding-top:10px}
 .touredit label{display:flex;flex-direction:column;gap:4px;font-size:.85rem;color:var(--muted)}
 .touredit input,.touredit select{font:inherit;color:var(--ink)}

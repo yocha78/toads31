@@ -248,10 +248,19 @@ function renderTours(){
     return `<div class="tourcard" data-tour="${id}">
       <div class="tn"><b>${esc(t.name)}</b><span class="pill${t.status==="live"&&!t.champion?"":" idle"}">${esc(statusText(t))}</span></div>
       <div class="ti">${t.venue?esc(t.venue)+" · ":""}${fmtDate(t.created)} · ${t.players} players · ${t.tables} table${t.tables===1?"":"s"} · code ${id}</div>
+      ${matchPlan(t)}
       <div class="actions"><button type="button" class="primary" data-open>Open</button><a class="btn" href="${esc(tvUrl(t.id))}" target="_blank" rel="noopener">TV screen</a></div>
       ${org?`<div class="tclaim"><button type="button" class="link" data-act="edit">Edit</button><button type="button" class="link" data-act="restart">Restart</button>${t.status==="live"?`<button type="button" class="link" data-act="end">End</button>`:""}<button type="button" class="link" data-act="delete">Delete</button></div>`:""}
       ${extra}</div>`;
   }).join("");
+}
+// How many matches a tournament has: per round, in total, and per table (each match is 2 or 3 games)
+function matchPlan(t){
+  const tour=Toads.buildTour(Array.from({length:t.players},(_,i)=>"p"+i),t.tables,t.format==="byes"?"byes":"quali",()=>0);
+  const rounds=[...(tour.quali?[["Qualifying",tour.quali.matches.length]]:[]),...tour.rounds.map((r,ri)=>[Toads.roundName(tour,ri),r.filter(m=>!m.bye).length])];
+  const total=rounds.reduce((a,r)=>a+r[1],0), per=total/t.tables;
+  return `<div class="plan"><span>${rounds.map(([n,k])=>`${esc(n)} <b>${k}</b>`).join(" · ")}</span>
+    <span><b>${total}</b> matches in total (${total*2} to ${total*3} games) · about <b>${Number.isInteger(per)?per:`${Math.floor(per)}–${Math.ceil(per)}`}</b> per table with ${t.tables} table${t.tables===1?"":"s"}${t.played!=null?` · <b>${t.played}</b> played, ${total-t.played} to go`:""}</span></div>`;
 }
 // Every player in a tournament, in draw order
 const drawNames=t=>t.quali?t.quali.draw.slice():t.rounds[0].flatMap(m=>[m.a,m.b]).filter(Boolean);

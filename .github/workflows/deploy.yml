@@ -129,16 +129,19 @@ jobs:
           TARGET="${SFTP_ROOT_PATH%/}/$FOLDER"
           sudo apt-get install -y -qq lftp >/dev/null
           if [ "$DRY_RUN" = "true" ]; then DRY="--dry-run"; PUT_INDEX="echo would upload index.html"; echo "Dry run: nothing will be uploaded"
-          else DRY=""; PUT_INDEX="put dist/index.html"; fi
-          # CSS and JS go up first and index.html last, so a phone never loads a new page with old scripts
+          else DRY=""; PUT_INDEX="put dist/index.html"; PUT_VERSION="put dist/version.json"; fi
+          # CSS and JS go up first, then index.html, and version.json last: a phone never loads a new page with
+          # old scripts, and is only told to reload once the new page is there (else the CDN caches the old page
+          # under the new ?v= address)
           cat > upload.lftp <<LFTP
           set sftp:auto-confirm yes
           set net:max-retries 3
           set net:timeout 30
           open --env-password -u "$SFTP_USER" -p $SFTP_PORT sftp://$SFTP_HOST
           cd "$TARGET"
-          mirror -R --verbose $DRY --exclude-glob index.html dist/ ./
+          mirror -R --verbose $DRY --exclude-glob index.html --exclude-glob version.json dist/ ./
           $PUT_INDEX
+          ${PUT_VERSION:-echo would upload version.json}
           cls -l
           LFTP
           lftp -f upload.lftp

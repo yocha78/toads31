@@ -14,14 +14,23 @@
 <script>
 // After a deploy, the website's cache can keep handing out the old page. version.json is always fetched fresh:
 // when it names a newer build than this page, reload as ?v=<build>, an address no cache has seen yet.
+// Checked on opening, and again when the phone comes back to a page left open for 10 minutes or more.
 (function(){
-  var b=document.querySelector('meta[name="toads-build"]').content;
+  var b=document.querySelector('meta[name="toads-build"]').content, hid=0;
   if(b==="dev"||!window.fetch)return;
-  fetch("version.json?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.json():null}).then(function(v){
-    if(!v||!v.build||v.build===b)return;
-    try{if(sessionStorage.getItem("toads31.reloaded")===v.build)return;sessionStorage.setItem("toads31.reloaded",v.build)}catch(e){return}
-    location.replace(location.pathname+"?v="+encodeURIComponent(v.build)+location.hash);
-  }).catch(function(){});
+  function check(){
+    fetch("version.json?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.json():null}).then(function(v){
+      if(!v||!v.build||v.build===b)return;
+      try{if(sessionStorage.getItem("toads31.reloaded")===v.build)return;sessionStorage.setItem("toads31.reloaded",v.build)}catch(e){return}
+      location.replace(location.pathname+"?v="+encodeURIComponent(v.build)+location.hash);
+    }).catch(function(){});
+  }
+  check();
+  document.addEventListener("visibilitychange",function(){
+    if(document.visibilityState==="hidden")hid=Date.now();
+    else if(hid&&Date.now()-hid>6e5)check();
+  });
+  window.addEventListener("pageshow",function(e){if(e.persisted)check()});
 })();
 </script>
 </head>

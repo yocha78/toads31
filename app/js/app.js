@@ -329,7 +329,6 @@ function renderTV(){
   $("tvTitle").textContent=t?T.name:"Toads 31";
   $("tvInfo").textContent=t?[T.venue,T.status==="ended"?"Ended":t.champion?"Finished":"Live",T.offline?"no signal, last scores shown":null].filter(Boolean).join(" · "):"";
   const url=location.origin+location.pathname+"#t-"+T.id;
-  $("tvLink").textContent=`or go to ${url.replace(/^https?:\/\//,"")}  ·  code ${T.id}`;
   drawQr(url,"tvQr");
   if(!t)return;
   Toads.settle(t);
@@ -342,12 +341,23 @@ function renderTV(){
       <div class="tvst">${g?`${esc(throwerOf(g,g.cur))} to throw · round ${g.round}`:claimed?"Ready to start":"Ready: scan the code to score this table"}</div></div>`;
   }).join("")||`<p class="tvnone">${t.champion?"All games played.":"No games on the tables right now."}</p>`;
   // Coming up: matches still to be played that have no table yet, earliest round first
-  const next=list.filter(({m})=>!m.winner&&!m.bye&&m.table==null).slice(0,10);
+  const waiting=list.filter(({m})=>!m.winner&&!m.bye&&m.table==null&&m.a&&m.b), next=waiting.slice(0,6);
   $("tvNextHead").hidden=!next.length;
-  $("tvNext").innerHTML=next.map(({m,ri})=>`<li><span>${m.a?esc(m.a):"?"} v ${m.b?esc(m.b):"?"}</span><i>${roundName(ri)}${m.a&&m.b?" · waiting for a table":" · players to come"}</i></li>`).join("");
+  $("tvNext").innerHTML=next.map(({m,ri})=>`<li><span>${esc(m.a)} v ${esc(m.b)}</span><i>${roundName(ri)}</i></li>`).join("")+(waiting.length>6?`<li><i>and ${waiting.length-6} more</i></li>`:"");
   $("tvChamp").innerHTML=t.champion?`<div class="tvchamp">${TOAD}<div><span>Champion</span><b>${esc(t.champion)}</b></div></div>`:"";
-  $("tvQuali").innerHTML=t.quali&&!qualiDone()?qualiHTML(true):"";
-  $("tvBracket").innerHTML=bracketHTML();
+  // While qualifying is on, its table fills the board; the knockout appears once it is complete
+  const quali=t.quali&&!qualiDone();
+  $("tvQuali").innerHTML=quali?qualiHTML(true):"";
+  $("tvBracket").innerHTML=quali?`<p class="tvlater">Then the top ${t.quali.K} play a knockout: ${t.rounds.map((_,ri)=>roundName(ri).toLowerCase()).join(", ")}.</p>`:bracketHTML();
+  fitTV();
+}
+// Everything stays on one screen: shrink the text of a side until it fits (no scrolling on a TV)
+function fitTV(){
+  for(const el of document.querySelectorAll(".tvgames,.tvboard")){
+    let px=parseFloat(getComputedStyle($("tvView")).fontSize);
+    el.style.fontSize=px+"px";
+    while(px>7&&(el.scrollHeight>el.clientHeight+1||el.scrollWidth>el.clientWidth+1)){px*=.94;el.style.fontSize=px+"px"}
+  }
 }
 
 function renderStats(){
@@ -721,12 +731,16 @@ function renderHub(){
 function qualiHTML(tv){
   const q=TOUR().quali, st=standings(), done=qualiDone();
   const played=q.matches.filter(m=>m.winner).length;
-  const rows=st.map((r,i)=>`<tr class="${i<q.K?"in":""}${i===q.K-1?" cut":""}"><td>${i+1}</td><td class="nm">${esc(r.name)}</td><td>${r.pl}</td><td>${r.w}</td><td>${r.gw-r.gl>0?"+":""}${r.gw-r.gl}</td><td>${r.toads?r.avg.toFixed(2):"–"}</td></tr>`).join("");
-  const open=tv||!S.qualiCollapsed;
-  const head=tv?`<div class="qhead"><h3>Qualifying</h3><span>${played} of ${q.matches.length} played · top ${q.K} go through</span></div>`:`<button type="button" class="qhead" id="qualiToggle" aria-expanded="${open}"><h3>Qualifying</h3><span>${done?`Complete · top ${q.K} go through`:`${played} of ${q.matches.length} matches played · top ${q.K} go through`}</span><i class="chev" aria-hidden="true"></i></button>`;
+  const row=(r,i)=>`<tr class="${i<q.K?"in":""}${i===q.K-1?" cut":""}"><td>${i+1}</td><td class="nm">${esc(r.name)}</td><td>${r.pl}</td><td>${r.w}</td><td>${r.gw-r.gl>0?"+":""}${r.gw-r.gl}</td><td>${r.toads?r.avg.toFixed(2):"–"}</td></tr>`;
+  const rows=st.map(row).join(""), thead=`<thead><tr><th>#</th><th class="nm">Player</th><th title="Matches played">Pl</th><th title="Matches won">W</th><th title="Games won minus lost">+/−</th><th title="Average per toad">Avg</th></tr></thead>`;
+  // The TV screen shows the table in two halves side by side
+  if(tv){const h=Math.ceil(st.length/2);return `<div class="qhead"><h3>Qualifying</h3><span>${played} of ${q.matches.length} played · top ${q.K} go through</span></div>
+    <div class="qsplit"><table class="qtab">${thead}<tbody>${st.slice(0,h).map(row).join("")}</tbody></table><table class="qtab">${thead}<tbody>${st.slice(h).map((r,i)=>row(r,i+h)).join("")}</tbody></table></div>`}
+  const open=!S.qualiCollapsed;
+  const head=`<button type="button" class="qhead" id="qualiToggle" aria-expanded="${open}"><h3>Qualifying</h3><span>${done?`Complete · top ${q.K} go through`:`${played} of ${q.matches.length} matches played · top ${q.K} go through`}</span><i class="chev" aria-hidden="true"></i></button>`;
   if(!open)return head;
   return `${head}
-    <table class="qtab"><thead><tr><th>#</th><th class="nm">Player</th><th title="Matches played">Pl</th><th title="Matches won">W</th><th title="Games won minus lost">+/−</th><th title="Average per toad">Avg</th></tr></thead><tbody>${rows}</tbody></table>
+    <table class="qtab">${thead}<tbody>${rows}</tbody></table>
     <p class="qnote">Ranked by matches won, then games +/−, then average per toad, then head-to-head.</p>`;
 }
 
@@ -1177,6 +1191,7 @@ if(NET.on){
   setInterval(()=>{if(S.live&&document.visibilityState==="visible"){if(S.live.queue.length)liveFlush();else liveFetch(false)}},LIVE_POLL);
   document.addEventListener("visibilitychange",()=>{if(S.live&&document.visibilityState==="visible")liveFlush()});
   window.addEventListener("online",()=>{if(S.live)liveFlush()});
+  window.addEventListener("resize",()=>{if(TV)fitTV()});
   if(S.live)liveFlush();
   window.addEventListener("online",syncGames);
   setInterval(()=>{if(ToadsApi.queued().length)syncGames();else syncNote()},30000);

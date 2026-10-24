@@ -83,6 +83,8 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: api.handler
+      # deleting every saved game at once can take a while; the API itself stops waiting at 30 s
+      Timeout: 29
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref Table
@@ -156,6 +158,21 @@ Resources:
         PlayTable:
           Type: HttpApi
           Properties: {ApiId: !Ref Api, Path: "/tournaments/{id}/tables/{n}/play", Method: POST}
+        EditTournament:
+          Type: HttpApi
+          Properties: {ApiId: !Ref Api, Path: "/tournaments/{id}", Method: PATCH}
+        RestartTournament:
+          Type: HttpApi
+          Properties: {ApiId: !Ref Api, Path: "/tournaments/{id}/restart", Method: POST}
+        DeleteGame:
+          Type: HttpApi
+          Properties: {ApiId: !Ref Api, Path: "/games/{id}", Method: DELETE}
+        DeleteAllGames:
+          Type: HttpApi
+          Properties: {ApiId: !Ref Api, Path: /games, Method: DELETE}
+        DeletePlayerGames:
+          Type: HttpApi
+          Properties: {ApiId: !Ref Api, Path: "/players/{id}/games", Method: DELETE}
 
   ApiLogs:
     Type: AWS::Logs::LogGroup

@@ -8,8 +8,8 @@
 <style>*,*::before,*::after{box-sizing:border-box}:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 <title>Toads Scorer</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Atkinson+Hyperlegible:wght@400;700&family=Cabin+Sketch:wght@400;700&family=Patrick+Hand&display=swap">
-<link rel="stylesheet" href="css/app.css?v=20261023">
-<meta name="toads-qr" content="js/vendor/qrcode.js?v=20261023">
+<link rel="stylesheet" href="css/app.css?v=20261024">
+<meta name="toads-qr" content="js/vendor/qrcode.js?v=20261024">
 <meta name="toads-build" content="dev">
 <script>
 // After a deploy, the website's cache can keep handing out the old page. version.json is always fetched fresh:
@@ -35,7 +35,7 @@
 </script>
 </head>
 <body>
-<div class="wrap">
+<div class="wrap" id="app">
   <header class="brand">
     <svg class="logo" viewBox="0 0 80 100" role="img" aria-label="Toad in the hole table">
       <!-- backboard -->
@@ -66,6 +66,7 @@
       <h1>Toads <span>31</span></h1>
       <p class="sub">Count down from 31. 2 in the hole, 1 on the table. Finish exactly.</p>
     </div>
+    <button type="button" class="menubtn" id="menuBtn" aria-label="Menu" hidden><svg viewBox="0 0 20 16" aria-hidden="true"><path d="M1 2h18M1 8h18M1 14h18"/></svg><span>Menu</span></button>
   </header>
 
   <!-- SETUP -->
@@ -126,14 +127,15 @@
     </div>
     <button class="ghost" id="shuffleBtn" hidden>Shuffle the draw</button>
     <button class="primary big" id="startBtn" disabled>Start game</button>
-    <button class="ghost" id="statsBtn" hidden>Players &amp; stats</button>
   </section>
 
-  <!-- PLAYERS & STATS (online only) -->
-  <section id="playersView" class="panel" hidden>
-    <div class="viewhead"><h2>Players</h2><button class="ghost" id="playersBack">Back</button></div>
-    <p class="hint" id="playersHint"></p>
-    <div class="chips" id="dirList"></div>
+  <!-- MENU (online only) -->
+  <section id="menuView" class="panel" hidden>
+    <div class="viewhead"><h2>Menu</h2><button class="ghost" id="menuBack">Back</button></div>
+    <nav class="menulist">
+      <button type="button" id="menuPlayers"><b>Players &amp; stats</b><span>Each player's games, wins and averages</span></button>
+      <button type="button" id="menuTours"><b>Tournaments</b><span>Follow one, put it on a TV screen, or (organiser) edit, restart and delete</span></button>
+    </nav>
     <div class="orgbox" id="orgBox">
       <h2>Organiser</h2>
       <form class="row" id="orgLogin">
@@ -141,14 +143,36 @@
         <button class="primary" type="submit">Log in</button>
       </form>
       <div class="orgon" id="orgOn" hidden>
-        <p class="hint">Logged in as organiser on this phone. Open a player to rename, merge or delete them.</p>
+        <p class="hint">Logged in as organiser on this phone. Open a player in Players &amp; stats to rename, merge or delete them, or to delete their games.</p>
         <h2>Venues</h2>
         <ul class="players" id="venueAdmin"></ul>
+        <h2>Saved games</h2>
+        <button class="ghost danger" id="wipeBtn">Delete all saved games</button>
+        <div class="confirm" id="wipeConfirm" hidden>
+          <span>This deletes every saved game and all the players' stats, for everyone. Players, venues and tournaments stay. It can't be undone. Type DELETE to confirm.</span>
+          <input type="text" id="wipeInput" autocomplete="off" aria-label="Type DELETE to confirm">
+          <div class="actions"><button id="wipeNo">Cancel</button><button class="primary" id="wipeYes" disabled>Delete all games</button></div>
+        </div>
         <button class="ghost" id="orgLogout">Log out</button>
       </div>
       <p class="msg" id="orgMsg" aria-live="polite"></p>
     </div>
     <p class="hint">What's saved: player names, pubs, and the scores of finished games. Nothing else about you. The organiser can delete a player and their stats.</p>
+  </section>
+
+  <!-- TOURNAMENTS (online only) -->
+  <section id="toursView" class="panel" hidden>
+    <div class="viewhead"><h2>Tournaments</h2><button class="ghost" id="toursBack">Back</button></div>
+    <p class="hint" id="toursHint"></p>
+    <p class="msg" id="toursMsg" aria-live="polite"></p>
+    <div class="tourlist" id="toursList"></div>
+  </section>
+
+  <!-- PLAYERS & STATS (online only) -->
+  <section id="playersView" class="panel" hidden>
+    <div class="viewhead"><h2>Players</h2><button class="ghost" id="playersBack">Menu</button></div>
+    <p class="hint" id="playersHint"></p>
+    <div class="chips" id="dirList"></div>
   </section>
 
   <section id="statsView" class="panel" hidden>
@@ -169,6 +193,7 @@
         <button id="mergeBtn">Merge</button>
       </div>
       <p class="hint">Merge moves this player's games to the chosen player, then removes this one. Use it for duplicates like "Dave" and "Dave B".</p>
+      <button class="ghost" id="deleteGamesBtn">Delete all this player's games</button>
       <button class="ghost" id="deletePlayerBtn">Delete this player</button>
       <div class="confirm" id="statsConfirm" hidden>
         <span id="statsConfirmText"></span>
@@ -208,6 +233,7 @@
         </form>
         <div class="actions">
           <button id="liveShareBtn" aria-controls="shareBox">Share</button>
+          <a class="btn" id="liveTv" target="_blank" rel="noopener">TV screen</a>
           <button class="ghost" id="liveEnd">End tournament</button>
         </div>
         <div class="confirm" id="liveEndConfirm" hidden>
@@ -217,7 +243,7 @@
         <div class="sharebox" id="shareBox" hidden>
           <div class="qr" id="liveQr"></div>
           <div class="row"><input type="text" id="liveLink" readonly aria-label="Tournament link"><button id="liveCopy">Copy link</button></div>
-          <p class="hint">Anyone with the link can follow the tables and bracket. Scoring a table needs the PIN.</p>
+          <p class="hint">Anyone with the link can follow the tables and bracket. Scoring a table needs the PIN. For a big screen, open the TV screen on it (or type the link above with #tv- in place of #t-).</p>
         </div>
       </div>
       <div class="panel win" id="champPanel" hidden>
@@ -292,12 +318,39 @@
     <button class="ghost" id="undoWinBtn">Undo winning throw</button>
   </section>
   <p class="hint" id="syncNote" style="text-align:center" aria-live="polite" hidden></p>
-  <p class="hint" style="text-align:center">Version 23 Oct 2026 · Auto update</p>
+  <p class="hint" style="text-align:center">Version 24 Oct 2026 · Menu and TV screen</p>
 </div>
 
-<script src="config.js?v=20261023"></script>
-<script src="js/rules.js?v=20261023"></script>
-<script src="js/api.js?v=20261023"></script>
-<script src="js/app.js?v=20261023"></script>
+<!-- TV SCREEN (#tv-<code>): one tournament for a big screen in the pub -->
+<section id="tvView" class="tv" hidden>
+  <header class="tvhead">
+    <h1 id="tvTitle"></h1>
+    <span class="tvinfo" id="tvInfo"></span>
+    <button type="button" class="tvexit" id="tvExit">Exit</button>
+  </header>
+  <p class="tvmsg" id="tvMsg" hidden></p>
+  <div class="tvmain" id="tvMain">
+    <aside class="tvgames">
+      <h2>Now playing</h2>
+      <div id="tvNow"></div>
+      <h2 id="tvNextHead">Coming up</h2>
+      <ul id="tvNext"></ul>
+    </aside>
+    <div class="tvboard chalk">
+      <div id="tvChamp"></div>
+      <div id="tvQuali"></div>
+      <div id="tvBracket"></div>
+    </div>
+  </div>
+  <footer class="tvfoot">
+    <div class="qr" id="tvQr"></div>
+    <div><b>Scan if you want to register the score of a game</b><span id="tvLink"></span></div>
+  </footer>
+</section>
+
+<script src="config.js?v=20261024"></script>
+<script src="js/rules.js?v=20261024"></script>
+<script src="js/api.js?v=20261024"></script>
+<script src="js/app.js?v=20261024"></script>
 </body>
 </html>

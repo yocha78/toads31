@@ -289,6 +289,7 @@ body.tvmode{background:#141a18;color:var(--chalk);overflow:hidden}
 .tvinfo{color:var(--chalk-dim);font-size:1.05em;flex:1}
 .tvexit{font-size:.75rem;padding:4px 10px;background:transparent;color:var(--chalk-dim);border-color:rgba(236,236,228,.25);opacity:.5}
 .tvexit:hover,.tvexit:focus-visible{opacity:1}
+.tvswitch{opacity:.8;color:var(--chalk)}
 .tvmsg{font-size:1.6em;text-align:center;align-self:center;margin:0}
 .tvmain{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2.6fr);gap:1.4vw;min-height:0}
 .tvgames{display:flex;flex-direction:column;gap:.5em;min-width:0;min-height:0;overflow:hidden}

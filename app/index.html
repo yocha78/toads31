@@ -21,8 +21,10 @@
   function check(){
     fetch("version.json?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.json():null}).then(function(v){
       if(!v||!v.build||v.build===b)return;
-      try{if(sessionStorage.getItem("toads31.reloaded")===v.build)return;sessionStorage.setItem("toads31.reloaded",v.build)}catch(e){return}
-      location.replace(location.pathname+"?v="+encodeURIComponent(v.build)+location.hash);
+      // Twice at most per build: the second time with an address that is new for sure
+      var n=0;
+      try{var was=(sessionStorage.getItem("toads31.reloaded")||"").split("|");n=was[0]===v.build?+was[1]||1:0;if(n>=2)return;sessionStorage.setItem("toads31.reloaded",v.build+"|"+(n+1))}catch(e){return}
+      location.replace(location.pathname+"?v="+encodeURIComponent(v.build)+(n?"&r="+Date.now():"")+location.hash);
     }).catch(function(){});
   }
   check();

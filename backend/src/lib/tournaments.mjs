@@ -101,6 +101,7 @@ export async function listAllTournaments(db, table) {
     return {
       id: item.id, name: item.name, venue: item.venue || null, created: item.created, status: item.status,
       players: t.n, tables: t.tables, champion: t.champion || null, format: t.format,
+      played: Toads.allMatches(t).filter(({ m }) => m.winner && !m.bye).length,
     };
   });
 }

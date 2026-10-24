@@ -138,7 +138,7 @@ test("the management list shows every tournament; delete can take its games too"
   const al = (await call(h, "POST /players", { body: { name: "Al" } })).body.player;
   const a = (await create(h, { name: "Cup A" })).body.tournament, b = (await create(h, { name: "Cup B", players: ["Al", "Bo", "Cy"] })).body.tournament;
   const list = (await call(h, "GET /tournaments", { query: { all: "1" } })).body.tournaments;
-  assert.deepEqual(list.map(x => [x.name, x.status, x.players]).sort(), [["Cup A", "live", 4], ["Cup B", "live", 3]]);
+  assert.deepEqual(list.map(x => [x.name, x.status, x.players, x.played]).sort(), [["Cup A", "live", 4, 0], ["Cup B", "live", 3, 0]]);
   const tok = (await call(h, "POST /tournaments/{id}/tables/{n}/claim", { id: a.id, n: 0, body: { pin: PIN } })).body.token;
   await play(h, a, 0, tok, gameOps(structuredClone(a.tour), 0, 0, 0, "Al"));
   assert.equal(await played(h, al), 1);

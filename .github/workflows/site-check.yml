@@ -1,0 +1,19 @@
+name: Site cache check
+# Read-only: shows how the website caches the app's pages (no uploads, no secrets)
+on:
+  push:
+    branches: [claude/project-thread-elaiuv]
+    paths: [.github/workflows/site-check.yml]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          for f in toads31 toads31-test; do
+            for path in "" "index.html" "version.json" "?probe=$RANDOM" "js/app.js"; do
+              u="https://brightonpubguide.co.uk/$f/$path"
+              echo "=== $u"
+              curl -sS -o body.txt -D - "$u" | grep -iE '^(HTTP|cache-control|age|expires|x-cache|cf-cache-status|x-proxy-cache|server|via|x-gd|x-powered|last-modified|etag|vary)' || true
+              grep -o 'toads-build" content="[^"]*"' body.txt || grep -o '"build":"[^"]*"' body.txt || grep -o 'Version [^<]*' body.txt | head -1 || true
+            done
+          done

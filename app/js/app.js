@@ -329,6 +329,7 @@ function renderTV(){
   $("tvTitle").textContent=t?T.name:"Toads 31";
   $("tvInfo").textContent=t?[T.venue,T.status==="ended"?"Ended":t.champion?"Finished":"Live",T.offline?"no signal, last scores shown":null].filter(Boolean).join(" · "):"";
   const url=location.origin+location.pathname+"#t-"+T.id;
+  $("tvLink").textContent=url.replace(/^https?:\/\//,"");
   drawQr(url,"tvQr");
   if(!t)return;
   Toads.settle(t);

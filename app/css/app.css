@@ -334,6 +334,7 @@ body.tvmode{background:#141a18;color:var(--chalk);overflow:hidden}
 .tvfoot .qr{width:clamp(64px,10vh,150px);flex:none;padding:0}
 .tvfoot b{display:block;font-family:var(--chalk-display);font-size:1.3em;color:var(--chalk)}
 .tvfoot span{color:var(--chalk-dim)}
+.tvfoot .tvlink{display:block;color:var(--chalk);overflow-wrap:anywhere}
 @media (max-width:760px),(orientation:portrait) and (max-width:1100px){
   body.tvmode{overflow:auto}
   .tv{height:auto;min-height:100vh;font-size:15px;padding:14px;gap:12px;overflow:visible}

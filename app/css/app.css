@@ -94,8 +94,12 @@ ul.players li:last-child{border-bottom:0}
 .turn .who{font-family:var(--display);font-size:1.6rem;overflow-wrap:anywhere}
 .turn .need{color:var(--muted)}
 .pad{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;max-width:320px;margin:0 auto;width:100%}
-.pad button{font-family:var(--display);font-size:1.1rem;padding:8px 0;border-radius:8px;font-variant-numeric:tabular-nums}
-.pad button.over{color:var(--muted);border-style:dashed}
+/* Each score is a toad with the number on its belly */
+.pad{gap:8px 6px;margin-bottom:6px}
+.pad button{font-family:var(--display);font-size:1.15rem;line-height:1;font-variant-numeric:tabular-nums;color:#2b2a1e;border:0;border-radius:0;aspect-ratio:100/88;padding:34% 0 0;background:transparent url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 88'><g fill='%235c9a3a' stroke='%232f5a1c' stroke-width='2.5'><ellipse cx='18' cy='80' rx='13' ry='6'/><ellipse cx='82' cy='80' rx='13' ry='6'/><circle cx='28' cy='20' r='14'/><circle cx='72' cy='20' r='14'/><ellipse cx='50' cy='55' rx='46' ry='30'/></g><ellipse cx='50' cy='62' rx='29' ry='20' fill='%23f4ecc4'/><circle cx='28' cy='20' r='8' fill='%23fff'/><circle cx='72' cy='20' r='8' fill='%23fff'/><circle cx='30' cy='21' r='4' fill='%231d1d1b'/><circle cx='70' cy='21' r='4' fill='%231d1d1b'/><path d='M37 37 Q50 45 63 37' fill='none' stroke='%232f5a1c' stroke-width='2.5' stroke-linecap='round'/><circle cx='18' cy='44' r='2.5' fill='%23477a2b'/><circle cx='82' cy='46' r='2.5' fill='%23477a2b'/></svg>") center/contain no-repeat;transition:transform .08s}
+.pad button:active{transform:scale(.9) rotate(-4deg)}
+.pad button:focus-visible{outline:2px solid var(--brass,#b8892f);outline-offset:2px;border-radius:10px}
+.pad button.over{filter:grayscale(1);opacity:.45}
 .msg{min-height:1.4em;text-align:center;font-weight:700;margin:0}
 .msg.bad{color:var(--bad)} .msg.good{color:var(--good)}
 .log{list-style:none;margin:0;padding:0;font-size:.92rem;color:var(--muted);display:flex;flex-direction:column;gap:2px;max-height:180px;overflow:auto}

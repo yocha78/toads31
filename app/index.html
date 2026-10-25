@@ -83,6 +83,11 @@
       <button type="button" id="fmtQuali" aria-pressed="true">Qualifying round</button>
       <button type="button" id="fmtByes" aria-pressed="false">Byes</button>
     </div>
+    <div class="stepper" id="perRow" hidden>
+      <label for="perSel"><b>Qualifying matches each</b> <span class="hint">(matches per table)</span></label>
+      <select id="perSel"></select>
+      <span class="hint" id="perHint"></span>
+    </div>
     <div class="stepper" id="tablesRow" hidden>
       <span><b>Tables available</b><br><span class="hint">Matches run side by side, one per table.</span></span>
       <div class="step">
@@ -324,7 +329,7 @@
     <button class="ghost" id="undoWinBtn">Undo winning throw</button>
   </section>
   <p class="hint" id="syncNote" style="text-align:center" aria-live="polite" hidden></p>
-  <p class="hint" style="text-align:center">Version 25 Oct 2026 · Toad score buttons</p>
+  <p class="hint" style="text-align:center">Version 25 Oct 2026 · Qualifying matches each</p>
 </div>
 
 <!-- TV SCREEN (#tv-<code>): one tournament for a big screen in the pub -->

@@ -41,7 +41,8 @@ export function makeHandler(db = defaultDb, table = process.env.TABLE_NAME, getP
     "GET /players": () => list("players"),
     "POST /players": e => create("players", e),
     "GET /venues": () => list("venues"),
-    "POST /venues": e => create("venues", e),
+    // Only the organiser adds pubs, so the list stays tidy; everyone picks from it
+    "POST /venues": organiser(e => create("venues", e)),
     "POST /games": async e => {
       const body = readBody(e);
       if (!body) return json(400, { error: "body must be a JSON object" });

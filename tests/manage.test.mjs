@@ -147,3 +147,42 @@ test("the management list shows every tournament; delete can take its games too"
   assert.deepEqual((await call(h, "DELETE /tournaments/{id}", { id: b.id, token: org })).body, { deleted: true, gamesDeleted: 0 });
   assert.deepEqual((await call(h, "GET /tournaments", { query: { all: "1" } })).body.tournaments, []);
 });
+
+test("tables: the organiser names them, takes one out before its match starts, and puts it back", async () => {
+  const { h } = setup(), org = await orgToken(h);
+  const t = (await create(h, { players: ["Al", "Bo", "Cy", "Di", "Ed", "Fi"], tables: 3 })).body.tournament;
+  const edit = body => call(h, "PATCH /tournaments/{id}", { id: t.id, token: org, body });
+  const tour = async () => (await call(h, "GET /tournaments/{id}", { id: t.id })).body.tournament.tour;
+
+  assert.equal((await call(h, "PATCH /tournaments/{id}", { id: t.id, body: { tableNames: { 0: "x" } } })).status, 401);
+  assert.equal((await edit({ tableNames: { 0: "<b>" } })).status, 400);
+  assert.equal((await edit({ tableNames: { 0: "y".repeat(21) } })).status, 400);
+  assert.equal((await edit({ tableNames: { 0: "By the bar", 2: "Garden" } })).status, 200);
+  let v = await tour();
+  assert.deepEqual([0, 1, 2].map(k => T.tableName(v, k)), ["By the bar", "Table 2", "Garden"]);
+  assert.equal((await edit({ tableNames: { 2: "" } })).status, 200, "empty goes back to the default");
+  assert.equal(T.tableName(await tour(), 2), "Table 3");
+
+  // Table 1 has a game going, so it stays; table 2's match hasn't started, so it can go
+  const tok0 = (await call(h, "POST /tournaments/{id}/tables/{n}/claim", { id: t.id, n: 0, body: { pin: PIN } })).body.token;
+  const m0 = T.allMatches(v).find(({ m }) => m.table === 0);
+  await play(h, t, 0, tok0, [{ t: "start", ri: m0.ri, mi: m0.mi, gameId: uuid(), order: [m0.m.a, m0.m.b] }]);
+  assert.equal((await edit({ removeTable: 0 })).status, 409);
+  assert.equal((await edit({ removeTable: 7 })).status, 404);
+  await call(h, "POST /tournaments/{id}/tables/{n}/claim", { id: t.id, n: 1, body: { pin: PIN } });
+  assert.equal((await edit({ removeTable: 1 })).status, 200);
+  v = await tour();
+  assert.deepEqual(v.off, [1]);
+  assert.ok(!T.allMatches(v).some(({ m }) => m.table === 1), "nothing is sent to a table that was taken out");
+  assert.equal((await call(h, "POST /tournaments/{id}/tables/{n}/claim", { id: t.id, n: 1, body: { pin: PIN } })).status, 404);
+  assert.equal((await edit({ removeTable: 1 })).status, 404, "already out");
+  assert.equal((await edit({ removeTable: 2 })).status, 200);
+  assert.equal((await edit({ removeTable: 0 })).status, 409, "the last table stays");
+
+  assert.equal((await edit({ restoreTable: 0 })).status, 404);
+  assert.equal((await edit({ restoreTable: 1 })).status, 200);
+  v = await tour();
+  assert.deepEqual(v.off, [2]);
+  assert.ok(T.allMatches(v).some(({ m }) => m.table === 1 && !m.winner), "a match goes back on it");
+  assert.equal((await call(h, "GET /tournaments", { token: org, query: { all: "1" } })).body.tournaments[0].tables, 2);
+});

@@ -92,9 +92,8 @@
       </div>
     </div>
     <div class="venuebox" id="venueBox" hidden>
-      <h2><label for="venueInput">Venue</label></h2>
-      <input type="text" id="venueInput" list="venueOptions" placeholder="Pub or club (optional)" maxlength="60" autocomplete="off">
-      <datalist id="venueOptions"></datalist>
+      <h2><label for="venueSelect">Venue</label></h2>
+      <select id="venueSelect"></select>
     </div>
     <div class="livebox" id="liveBox" hidden>
       <h2 id="liveListHead">Live tournaments</h2>
@@ -147,6 +146,11 @@
       <div class="orgon" id="orgOn" hidden>
         <p class="hint">Logged in as organiser on this phone. Open a player in Players &amp; stats to rename, merge or delete them, or to delete their games.</p>
         <h2>Venues</h2>
+        <p class="hint">Only you add venues. Everyone else picks one from this list when they start a game (or leaves it blank).</p>
+        <form class="row" id="venueAddForm">
+          <input type="text" id="venueAddName" placeholder="New venue" maxlength="60" autocomplete="off" aria-label="New venue">
+          <button class="primary" type="submit">Add</button>
+        </form>
         <ul class="players" id="venueAdmin"></ul>
         <h2>Saved games</h2>
         <button class="ghost danger" id="wipeBtn">Delete all saved games</button>
@@ -320,7 +324,7 @@
     <button class="ghost" id="undoWinBtn">Undo winning throw</button>
   </section>
   <p class="hint" id="syncNote" style="text-align:center" aria-live="polite" hidden></p>
-  <p class="hint" style="text-align:center">Version 24 Oct 2026 · Menu and TV screen</p>
+  <p class="hint" style="text-align:center">Version 25 Oct 2026 · Venues and table names</p>
 </div>
 
 <!-- TV SCREEN (#tv-<code>): one tournament for a big screen in the pub -->

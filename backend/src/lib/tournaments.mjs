@@ -100,7 +100,7 @@ export async function listAllTournaments(db, table) {
     const t = JSON.parse(item.state);
     return {
       id: item.id, name: item.name, venue: item.venue || null, created: item.created, status: item.status,
-      players: t.n, tables: t.tables, champion: t.champion || null, format: t.format,
+      players: t.n, tables: t.tables - (t.off || []).length, champion: t.champion || null, format: t.format,
       played: Toads.allMatches(t).filter(({ m }) => m.winner && !m.bye).length,
     };
   });
@@ -129,7 +129,7 @@ async function mutate(db, table, id, change) {
   return { status: 503, body: { error: "busy, try again" } };
 }
 
-const tableNo = (tour, n) => (/^\d+$/.test(String(n)) && Number(n) < tour.tables ? Number(n) : null);
+const tableNo = (tour, n) => (/^\d+$/.test(String(n)) && Toads.tableOn(tour, Number(n)) ? Number(n) : null);
 const closed = item => item.status !== "live" ? { reply: { status: 409, body: { error: "the tournament has ended" } } } : null;
 
 // Claim table n with the PIN. takeover = take it from another phone (e.g. its battery died).
@@ -232,8 +232,9 @@ const listKey = item => ({ PK: "TOURNS", SK: `T#${item.created}#${item.id}` });
 const putList = (db, table, item) =>
   db.send(new PutCommand({ TableName: table, Item: { ...listKey(item), id: item.id, name: item.name, venue: item.venue, created: item.created } }));
 
-// Organiser: change the name, venue, PIN or number of tables, or correct a player's name.
-// input {name?, venue?, pin?, tables?, rename?: {from, to}}
+// Organiser: change the name, venue, PIN or number of tables, correct a player's name, name the tables,
+// or take one table out (only while no game has started on its match) and put it back.
+// input {name?, venue?, pin?, tables?, rename?: {from, to}, tableNames?: {n: name}, removeTable?: n, restoreTable?: n}
 export async function editTournament(db, table, id, input) {
   const b = input || {};
   const name = b.name === undefined ? undefined : cleanName(b.name, 40);
@@ -242,6 +243,17 @@ export async function editTournament(db, table, id, input) {
   if (b.venue && !venue) return { status: 400, body: { error: "venue is not valid" } };
   if (b.pin !== undefined && (typeof b.pin !== "string" || !/^\d{4,8}$/.test(b.pin))) return { status: 400, body: { error: "the PIN must be 4 to 8 digits" } };
   if (b.tables !== undefined && (!Number.isInteger(b.tables) || b.tables < 1 || b.tables > MAX_TABLES)) return { status: 400, body: { error: `tables must be 1 to ${MAX_TABLES}` } };
+  let tableNames = null;
+  if (b.tableNames !== undefined) {
+    if (!b.tableNames || typeof b.tableNames !== "object") return { status: 400, body: { error: "tableNames must map table numbers to names" } };
+    tableNames = {};
+    for (const [k, v] of Object.entries(b.tableNames)) {
+      if (!/^\d+$/.test(k) || +k >= MAX_TABLES) return { status: 400, body: { error: "no such table" } };
+      const nm = v == null || v === "" ? "" : cleanName(v, 20);
+      if (nm === null) return { status: 400, body: { error: "a table name must be up to 20 characters, without < or >" } };
+      tableNames[+k] = nm;
+    }
+  }
   let rename = null;
   if (b.rename) {
     const to = cleanName(b.rename.to, 24);
@@ -262,9 +274,32 @@ export async function editTournament(db, table, id, input) {
       const busy = Toads.allMatches(tour).find(({ m }) => m.table != null && m.table >= k && !m.winner && m.game && !m.game.done);
       if (busy) return { reply: { status: 409, body: { error: `table ${busy.m.table + 1} has a game going: finish it first` } } };
       for (const { m } of Toads.allMatches(tour)) if (m.table != null && m.table >= k && !m.winner) m.table = null;
+      tour.off = (tour.off || []).filter(x => x < k);
+      if (tour.off.length >= k) return { reply: { status: 409, body: { error: "a tournament needs at least one table: put one back first" } } };
       for (const n of Object.keys(item.claims)) if (+n >= k) delete item.claims[n];
       tour.tables = k;
       Toads.assignTables(tour);
+    }
+    if (b.removeTable !== undefined) {
+      const k = tableNo(tour, b.removeTable);
+      if (k == null) return { reply: { status: 404, body: { error: "no such table" } } };
+      if (tour.tables - (tour.off || []).length <= 1) return { reply: { status: 409, body: { error: "a tournament needs at least one table" } } };
+      const started = Toads.allMatches(tour).find(({ m }) => m.table === k && !m.winner && m.game);
+      if (started) return { reply: { status: 409, body: { error: `${Toads.tableName(tour, k)} has a match under way: finish it first` } } };
+      for (const { m } of Toads.allMatches(tour)) if (m.table === k && !m.winner) m.table = null;
+      delete item.claims[k];
+      tour.off = [...(tour.off || []), k];
+      Toads.assignTables(tour);
+    }
+    if (b.restoreTable !== undefined) {
+      const k = Number(b.restoreTable);
+      if (!(tour.off || []).includes(k)) return { reply: { status: 404, body: { error: "that table wasn't taken out" } } };
+      tour.off = tour.off.filter(x => x !== k);
+      Toads.assignTables(tour);
+    }
+    if (tableNames) {
+      tour.names = { ...(tour.names || {}) };
+      for (const [k, v] of Object.entries(tableNames)) { if (v) tour.names[k] = v; else delete tour.names[k]; }
     }
     if (name !== undefined) item.name = name;
     if (venue !== undefined) item.venue = venue;
@@ -280,6 +315,8 @@ export async function restartTournament(db, table, id, input) {
   const keepGames = !!(input || {}).keepGames;
   const r = await mutate(db, table, id, (item, tour) => {
     const fresh = Toads.buildTour(drawOrder(item, tour), tour.tables, tour.format === "byes" ? "byes" : "quali");
+    if (tour.names) fresh.names = tour.names;
+    if (tour.off) fresh.off = tour.off.filter(k => k < fresh.tables);
     Toads.settle(fresh); Toads.assignTables(fresh);
     Object.keys(tour).forEach(k => delete tour[k]); Object.assign(tour, fresh);
     item.status = "live"; item.claims = {};

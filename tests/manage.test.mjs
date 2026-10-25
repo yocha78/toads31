@@ -186,3 +186,16 @@ test("tables: the organiser names them, takes one out before its match starts, a
   assert.ok(T.allMatches(v).some(({ m }) => m.table === 1 && !m.winner), "a match goes back on it");
   assert.equal((await call(h, "GET /tournaments", { token: org, query: { all: "1" } })).body.tournaments[0].tables, 2);
 });
+
+test("qualifying matches per player: chosen at the start, checked, and kept by a restart", async () => {
+  const { h } = setup(), org = await orgToken(h);
+  const seven = ["Al", "Bo", "Cy", "Di", "Ed", "Fi", "Gus"];
+  assert.equal((await create(h, { players: seven, per: 3 })).status, 400, "odd with an odd number of players");
+  assert.equal((await create(h, { players: seven, per: 8 })).status, 400);
+  const t = (await create(h, { players: seven, per: 4 })).body.tournament;
+  const tour = async () => (await call(h, "GET /tournaments/{id}", { id: t.id })).body.tournament.tour;
+  assert.equal((await tour()).quali.matches.length, 14);
+  assert.equal((await call(h, "GET /tournaments", { token: org, query: { all: "1" } })).body.tournaments[0].per, 4);
+  assert.equal((await call(h, "POST /tournaments/{id}/restart", { id: t.id, token: org, body: {} })).status, 200);
+  assert.equal((await tour()).quali.per, 4);
+});

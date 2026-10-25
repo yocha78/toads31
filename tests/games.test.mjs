@@ -6,8 +6,12 @@ import { makeHandler } from "../backend/src/api.mjs";
 import { fakeDb } from "./fake-db.mjs";
 const T = createRequire(import.meta.url)("../app/js/rules.js");
 
+// Adding a venue needs the organiser: the helper logs in for it
+const PW = async () => "pw";
+const organiser = async h => ({ authorization: "Bearer " + JSON.parse((await h({ routeKey: "POST /auth/organiser", body: JSON.stringify({ password: "pw" }) })).body).token });
 const call = async (h, routeKey, body, pathParameters) => {
-  const r = await h({ routeKey, pathParameters, body: body === undefined ? undefined : JSON.stringify(body) });
+  const headers = routeKey === "POST /venues" ? await organiser(h) : {};
+  const r = await h({ routeKey, pathParameters, headers, body: body === undefined ? undefined : JSON.stringify(body) });
   return { status: r.statusCode, body: JSON.parse(r.body) };
 };
 let n = 0;
@@ -29,7 +33,7 @@ const singleGame = () => played(["Al", "Bo"], AL_WINS);
 const record = (g, extra = {}) => T.gameRecord(g, { id: uuid(), mode: g.members ? "duo" : "single", finished: Date.now(), ...extra });
 
 test("a finished single game is saved with its turns, and sending it again saves it once", async () => {
-  const db = fakeDb(), h = makeHandler(db, "T");
+  const db = fakeDb(), h = makeHandler(db, "T", PW);
   const rec = record(singleGame(), { venue: "The Basketmakers" });
   const r = await call(h, "POST /games", rec);
   assert.equal(r.status, 201);
@@ -48,7 +52,7 @@ test("a finished single game is saved with its turns, and sending it again saves
 });
 
 test("registered players and venues are linked, and each registered player gets a summary", async () => {
-  const db = fakeDb(), h = makeHandler(db, "T");
+  const db = fakeDb(), h = makeHandler(db, "T", PW);
   const al = (await call(h, "POST /players", { name: "Al" })).body.player;
   const v = (await call(h, "POST /venues", { name: "The Lewes Arms" })).body.venue;
   const rec = record(singleGame(), { venue: "the lewes arms" });
@@ -65,7 +69,7 @@ test("registered players and venues are linked, and each registered player gets 
 });
 
 test("duo games credit each partner with their own throws", async () => {
-  const db = fakeDb(), h = makeHandler(db, "T");
+  const db = fakeDb(), h = makeHandler(db, "T", PW);
   await call(h, "POST /players", { name: "Bo" });
   const g = played(["Reds", "Blues"], AL_WINS, { Reds: ["Al", "Bo"], Blues: ["Cy", "Di"] });
   const r = await call(h, "POST /games", record(g));
@@ -77,7 +81,7 @@ test("duo games credit each partner with their own throws", async () => {
 });
 
 test("long games are written in batches of 25 turns", async () => {
-  const db = fakeDb(), h = makeHandler(db, "T");
+  const db = fakeDb(), h = makeHandler(db, "T", PW);
   const g = played(["A", "B", "C"], [...Array(60).fill(0), 8, 0, 0, 8, 0, 0, 8, 0, 0, [7, 4]]);
   assert.equal(g.hist.length, 70);
   const r = await call(h, "POST /games", record(g));
@@ -87,7 +91,7 @@ test("long games are written in batches of 25 turns", async () => {
 });
 
 test("games that don't add up are refused and nothing is saved", async () => {
-  const db = fakeDb(), h = makeHandler(db, "T");
+  const db = fakeDb(), h = makeHandler(db, "T", PW);
   const bad = [
     r => { r.id = "nope"; },
     r => { r.mode = "tournament"; },
@@ -113,7 +117,7 @@ test("games that don't add up are refused and nothing is saved", async () => {
 });
 
 test("the latest games are listed newest first", async () => {
-  const h = makeHandler(fakeDb(), "T");
+  const h = makeHandler(fakeDb(), "T", PW);
   const a = record(singleGame(), { finished: Date.now() - 60000 }), b = record(singleGame(), { venue: "The Swan" });
   await call(h, "POST /games", a);
   await call(h, "POST /games", b);
@@ -124,7 +128,7 @@ test("the latest games are listed newest first", async () => {
 });
 
 test("unknown game ids are 404", async () => {
-  const h = makeHandler(fakeDb(), "T");
+  const h = makeHandler(fakeDb(), "T", PW);
   assert.equal((await call(h, "GET /games/{id}", undefined, { id: uuid() })).status, 404);
   assert.equal((await call(h, "GET /games/{id}", undefined, { id: "x" })).status, 404);
 });

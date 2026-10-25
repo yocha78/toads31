@@ -1,6 +1,6 @@
 // Live tournaments (REQUIREMENTS 4.5). The organiser creates one; anyone with its link follows the tables
 // and bracket; whoever has the scoring PIN claims a table and scores it from their own phone.
-//   PK=TOURN#<code>  SK=META               → name, venue, status, ver, state (the bracket as JSON), pin, claims
+//   PK=TOURN#<code>  SK=META               → name, venue, status, ver, state (the bracket as JSON), pin, claims, players
 //   PK=TOURNS        SK=T#<created>#<code> → list entry, so phones can find tournaments without the link
 // The bracket is one item, changed with the same rules as the app (rules.cjs, a copy of app/js/rules.js).
 // Every write is conditional on the version read, so two tables scoring at once never overwrite each other:
@@ -9,7 +9,7 @@ import { GetCommand, PutCommand, QueryCommand, TransactWriteCommand, DeleteComma
 import { createHash, randomBytes, randomInt, timingSafeEqual } from "node:crypto";
 import Toads from "./rules.cjs";
 import { cleanName, nameKey } from "./http.mjs";
-import { saveGame, deleteGame } from "./games.mjs";
+import { saveGame, deleteGame, deleteGames } from "./games.mjs";
 
 const CODE = /^[A-Z0-9]{6}$/, CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // no 0/O, 1/I/L
 const MAX_PLAYERS = 32, MAX_TABLES = 8, LIST_DAYS = 3;
@@ -51,7 +51,7 @@ export async function createTournament(db, table, input, now = new Date()) {
     const id = Array.from({ length: 6 }, () => CHARS[randomInt(CHARS.length)]).join("");
     const item = {
       ...key(id), id, name, venue, created, status: "live", ver: 1, state: JSON.stringify(tour),
-      pin: { salt, hash: pinHash(salt, b.pin) }, claims: {},
+      pin: { salt, hash: pinHash(salt, b.pin) }, claims: {}, players,
     };
     try {
       await db.send(new TransactWriteCommand({
@@ -89,6 +89,23 @@ export async function listTournaments(db, table, now = new Date()) {
   return (r.Items || []).map(({ id, name, venue, created }) => ({ id, name, venue: venue || null, created }));
 }
 
+// Organiser's list: every tournament, newest first, with how far it got
+export async function listAllTournaments(db, table) {
+  const r = await db.send(new QueryCommand({
+    TableName: table, KeyConditionExpression: "PK = :pk AND SK >= :from",
+    ExpressionAttributeValues: { ":pk": "TOURNS", ":from": "T#" }, ScanIndexForward: false, Limit: 100,
+  }));
+  const items = await Promise.all((r.Items || []).map(i => load(db, table, i.id)));
+  return items.filter(Boolean).map(item => {
+    const t = JSON.parse(item.state);
+    return {
+      id: item.id, name: item.name, venue: item.venue || null, created: item.created, status: item.status,
+      players: t.n, tables: t.tables - (t.off || []).length, champion: t.champion || null, format: t.format,
+      played: Toads.allMatches(t).filter(({ m }) => m.winner && !m.bye).length,
+    };
+  });
+}
+
 // Read, change, write if nobody else wrote in between, otherwise start again.
 // change(item, tour) → {reply} to answer without writing, or {reply, write:true} after changing item/tour
 async function mutate(db, table, id, change) {
@@ -112,7 +129,7 @@ async function mutate(db, table, id, change) {
   return { status: 503, body: { error: "busy, try again" } };
 }
 
-const tableNo = (tour, n) => (/^\d+$/.test(String(n)) && Number(n) < tour.tables ? Number(n) : null);
+const tableNo = (tour, n) => (/^\d+$/.test(String(n)) && Toads.tableOn(tour, Number(n)) ? Number(n) : null);
 const closed = item => item.status !== "live" ? { reply: { status: 409, body: { error: "the tournament has ended" } } } : null;
 
 // Claim table n with the PIN. takeover = take it from another phone (e.g. its battery died).
@@ -191,7 +208,125 @@ export async function playTable(db, table, id, n, input, organiser, now = new Da
   });
 }
 
-// Organiser: end it (scoring stops, everyone still sees the result) or delete it (saved games stay)
+// Every name in the bracket, in the order the tournament was drawn
+function drawOrder(item, tour) {
+  if (Array.isArray(item.players)) return item.players;
+  if (tour.quali) return tour.quali.draw.slice();
+  return tour.rounds[0].flatMap(m => [m.a, m.b]).filter(Boolean);
+}
+// A player's name, everywhere it appears in the bracket
+function renameIn(tour, from, to) {
+  const swap = v => (v === from ? to : v);
+  for (const { m } of Toads.allMatches(tour)) {
+    m.a = swap(m.a); m.b = swap(m.b); m.winner = swap(m.winner);
+    if (m.game) {
+      m.game.gp = m.game.gp.map(swap);
+      for (const h of m.game.hist) h.who = swap(h.who);
+    }
+    for (const g of m.games || []) if (g[from]) { g[to] = g[from]; delete g[from]; }
+  }
+  if (tour.quali) tour.quali.draw = tour.quali.draw.map(swap);
+  tour.champion = swap(tour.champion);
+}
+const listKey = item => ({ PK: "TOURNS", SK: `T#${item.created}#${item.id}` });
+const putList = (db, table, item) =>
+  db.send(new PutCommand({ TableName: table, Item: { ...listKey(item), id: item.id, name: item.name, venue: item.venue, created: item.created } }));
+
+// Organiser: change the name, venue, PIN or number of tables, correct a player's name, name the tables,
+// or take one table out (only while no game has started on its match) and put it back.
+// input {name?, venue?, pin?, tables?, rename?: {from, to}, tableNames?: {n: name}, removeTable?: n, restoreTable?: n}
+export async function editTournament(db, table, id, input) {
+  const b = input || {};
+  const name = b.name === undefined ? undefined : cleanName(b.name, 40);
+  if (name === null || name === "") return { status: 400, body: { error: "name must be 1 to 40 characters, without < or >" } };
+  const venue = b.venue === undefined ? undefined : b.venue === null || b.venue === "" ? null : cleanName(b.venue, 60);
+  if (b.venue && !venue) return { status: 400, body: { error: "venue is not valid" } };
+  if (b.pin !== undefined && (typeof b.pin !== "string" || !/^\d{4,8}$/.test(b.pin))) return { status: 400, body: { error: "the PIN must be 4 to 8 digits" } };
+  if (b.tables !== undefined && (!Number.isInteger(b.tables) || b.tables < 1 || b.tables > MAX_TABLES)) return { status: 400, body: { error: `tables must be 1 to ${MAX_TABLES}` } };
+  let tableNames = null;
+  if (b.tableNames !== undefined) {
+    if (!b.tableNames || typeof b.tableNames !== "object") return { status: 400, body: { error: "tableNames must map table numbers to names" } };
+    tableNames = {};
+    for (const [k, v] of Object.entries(b.tableNames)) {
+      if (!/^\d+$/.test(k) || +k >= MAX_TABLES) return { status: 400, body: { error: "no such table" } };
+      const nm = v == null || v === "" ? "" : cleanName(v, 20);
+      if (nm === null) return { status: 400, body: { error: "a table name must be up to 20 characters, without < or >" } };
+      tableNames[+k] = nm;
+    }
+  }
+  let rename = null;
+  if (b.rename) {
+    const to = cleanName(b.rename.to, 24);
+    if (typeof b.rename.from !== "string" || !to) return { status: 400, body: { error: "the new name must be 1 to 24 characters, without < or >" } };
+    rename = { from: b.rename.from, to };
+  }
+  const r = await mutate(db, table, id, (item, tour) => {
+    if (rename && rename.from !== rename.to) {
+      const names = drawOrder(item, tour);
+      if (!names.includes(rename.from)) return { reply: { status: 404, body: { error: `${rename.from} isn't in this tournament` } } };
+      if (names.some(n => n !== rename.from && nameKey(n) === nameKey(rename.to))) return { reply: { status: 409, body: { error: `${rename.to} is already in this tournament` } } };
+      renameIn(tour, rename.from, rename.to);
+      item.players = names.map(n => (n === rename.from ? rename.to : n));
+    }
+    if (b.tables !== undefined && b.tables !== tour.tables) {
+      const k = Math.min(b.tables, Math.max(1, Math.floor(tour.n / 2)));
+      // A table being taken away must not have a game going on it
+      const busy = Toads.allMatches(tour).find(({ m }) => m.table != null && m.table >= k && !m.winner && m.game && !m.game.done);
+      if (busy) return { reply: { status: 409, body: { error: `table ${busy.m.table + 1} has a game going: finish it first` } } };
+      for (const { m } of Toads.allMatches(tour)) if (m.table != null && m.table >= k && !m.winner) m.table = null;
+      tour.off = (tour.off || []).filter(x => x < k);
+      if (tour.off.length >= k) return { reply: { status: 409, body: { error: "a tournament needs at least one table: put one back first" } } };
+      for (const n of Object.keys(item.claims)) if (+n >= k) delete item.claims[n];
+      tour.tables = k;
+      Toads.assignTables(tour);
+    }
+    if (b.removeTable !== undefined) {
+      const k = tableNo(tour, b.removeTable);
+      if (k == null) return { reply: { status: 404, body: { error: "no such table" } } };
+      if (tour.tables - (tour.off || []).length <= 1) return { reply: { status: 409, body: { error: "a tournament needs at least one table" } } };
+      const started = Toads.allMatches(tour).find(({ m }) => m.table === k && !m.winner && m.game);
+      if (started) return { reply: { status: 409, body: { error: `${Toads.tableName(tour, k)} has a match under way: finish it first` } } };
+      for (const { m } of Toads.allMatches(tour)) if (m.table === k && !m.winner) m.table = null;
+      delete item.claims[k];
+      tour.off = [...(tour.off || []), k];
+      Toads.assignTables(tour);
+    }
+    if (b.restoreTable !== undefined) {
+      const k = Number(b.restoreTable);
+      if (!(tour.off || []).includes(k)) return { reply: { status: 404, body: { error: "that table wasn't taken out" } } };
+      tour.off = tour.off.filter(x => x !== k);
+      Toads.assignTables(tour);
+    }
+    if (tableNames) {
+      tour.names = { ...(tour.names || {}) };
+      for (const [k, v] of Object.entries(tableNames)) { if (v) tour.names[k] = v; else delete tour.names[k]; }
+    }
+    if (name !== undefined) item.name = name;
+    if (venue !== undefined) item.venue = venue;
+    if (b.pin !== undefined) { const salt = randomBytes(8).toString("hex"); item.pin = { salt, hash: pinHash(salt, b.pin) }; }
+    return { write: true, reply: { status: 200, body: { saved: true } }, after: it => (name !== undefined || venue !== undefined) && putList(db, table, it) };
+  });
+  return r;
+}
+
+// Organiser: start again from the draw, with the same players and tables. Phones scoring it lose their
+// tables, and (unless keepGames) the games it already saved leave the players' stats.
+export async function restartTournament(db, table, id, input) {
+  const keepGames = !!(input || {}).keepGames;
+  const r = await mutate(db, table, id, (item, tour) => {
+    const fresh = Toads.buildTour(drawOrder(item, tour), tour.tables, tour.format === "byes" ? "byes" : "quali");
+    if (tour.names) fresh.names = tour.names;
+    if (tour.off) fresh.off = tour.off.filter(k => k < fresh.tables);
+    Toads.settle(fresh); Toads.assignTables(fresh);
+    Object.keys(tour).forEach(k => delete tour[k]); Object.assign(tour, fresh);
+    item.status = "live"; item.claims = {};
+    return { write: true, reply: { status: 200, body: { restarted: true } } };
+  });
+  if (r.status === 200 && !keepGames) r.body.gamesDeleted = await deleteGames(db, table, { tournament: id });
+  return r;
+}
+
+// Organiser: end it (scoring stops, everyone still sees the result) or delete it
 export async function endTournament(db, table, id) {
   return mutate(db, table, id, item => {
     if (item.status === "ended") return { reply: { status: 200, body: { ended: true, ver: item.ver } } };
@@ -199,10 +334,11 @@ export async function endTournament(db, table, id) {
     return { write: true, reply: { status: 200, body: { ended: true } } };
   });
 }
-export async function deleteTournament(db, table, id) {
+// withGames: also take its saved games out of the players' stats. → false when there is no such tournament
+export async function deleteTournament(db, table, id, withGames) {
   const item = await load(db, table, id);
   if (!item) return false;
-  await db.send(new DeleteCommand({ TableName: table, Key: { PK: "TOURNS", SK: `T#${item.created}#${item.id}` } }));
+  await db.send(new DeleteCommand({ TableName: table, Key: listKey(item) }));
   await db.send(new DeleteCommand({ TableName: table, Key: key(item.id) }));
-  return true;
+  return { deleted: true, gamesDeleted: withGames ? await deleteGames(db, table, { tournament: item.id }) : 0 };
 }

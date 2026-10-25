@@ -20,7 +20,7 @@ const call = async (h, routeKey, { body, id, token, query } = {}) => {
 };
 const loginToken = async h => (await call(h, "POST /auth/organiser", { body: { password: PASSWORD } })).body.token;
 const addPlayer = async (h, name) => (await call(h, "POST /players", { body: { name } })).body.player;
-const addVenue = async (h, name) => (await call(h, "POST /venues", { body: { name } })).body.venue;
+const addVenue = async (h, name) => (await call(h, "POST /venues", { body: { name }, token: await loginToken(h) })).body.venue;
 let n = 0;
 const uuid = () => `00000000-0000-4000-8000-${String(++n).padStart(12, "0")}`;
 // A game in which `winner` scores as much as their toads allow and everyone else scores 0

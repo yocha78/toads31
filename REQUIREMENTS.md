@@ -228,7 +228,7 @@ The browser must **never** hold AWS credentials or talk to DynamoDB directly.
 
 ### 4.4 Saving games
 - Single and Duo games are saved when finished. Abandoned games are not counted.
-- **Every game records the pub (venue).** It is chosen at setup from a shared list of venues, with a type-ahead search. Anyone can add a venue. The app remembers the last venue used on that phone and pre-selects it.
+- **Every game records the pub (venue), if one is picked.** It is chosen at setup from a dropdown of the shared venue list, and can be left blank. Only the organiser adds venues, in the Menu (changed 25 Oct 2026; before that anyone could type a new one). The app remembers the last venue used on that phone and pre-selects it.
 - Tournaments record their venue once, and all their games inherit it.
 - Stats can be filtered by venue, e.g. "Al's average at The Lewes Arms". A venue list also suits a future link-up with the Brighton Pub Guide.
 - **Each turn stores:** game, turn index, round, thrower, team (Duo), score, toads thrown, bust flag, points left before the turn, and timestamp.
@@ -249,6 +249,8 @@ The browser must **never** hold AWS credentials or talk to DynamoDB directly.
 - **Phase 1 tournament behaviour is unchanged:** first to 2, byes, tables, a throwing order per game, ambiguous-finish prompt, undo, collapsible Tables section and so on.
 - **Organiser controls:** end or reset the tournament, correct a result, release a table.
 - **Built in step 7 (Oct 2026):** with the organiser logged in, Tournament mode on the setup screen offers **Run it live**, with a name and a scoring PIN (4 to 8 digits, stored hashed). The tournament gets a 6-character code, a link (`#t-<code>`) and a QR code under **Share**; phones also find it under "Live tournaments" on the setup screen for 3 days. Followers see the Tables screen and bracket, refreshed every 4 s while the page is visible, with "Updated n s ago". **Score this table** asks for the PIN once per phone and claims the table; other phones see "Scored on another phone" with **Watch** (the scoresheet, read-only) and **Take over** (PIN). The scoring phone applies each start, turn and undo with the same rules code as the server (`Toads.applyOp`, copied to `backend/src/lib/rules.cjs`; a test checks the copy) and queues it, so scoring carries on offline ("Offline: n changes waiting to send"). The whole bracket is one DynamoDB item written conditionally on its version, so two tables scoring at once both land, and a stale or duplicate change from another phone is refused or ignored. Each finished game is saved to the players' stats with its tournament; undoing a winning throw takes it out again (only while nothing has started on the back of that result). The organiser can release a table, end the tournament for everyone (results stay visible) or delete it (`DELETE /tournaments/{id}`). Not built: resetting a tournament, and correcting a result other than by undoing the last winning throw.
+- **Menu, management and TV screen (24 Oct 2026):** online, a **Menu** button (top right) replaces the Players & stats button at the bottom. It holds Players & stats, **Tournaments**, and the organiser login with venues and **Delete all saved games** (type DELETE to confirm; `DELETE /games?confirm=all`). On a player's stats the organiser can delete one game (`DELETE /games/{id}`, it leaves everyone's stats) or all of that player's games (`DELETE /players/{id}/games`); the list shows the latest 10 with **Show all**. **Tournaments** lists every live tournament (`GET /tournaments?all=1`) with Open and **TV screen** for anyone, and for the organiser Edit (name, venue, tables, new PIN, correct a player's name: `PATCH /tournaments/{id}`), **Restart** from the draw (`POST /tournaments/{id}/restart`; claims are dropped and, unless unticked, its saved games leave the stats), End and Delete (optionally with its games). The **TV screen** (`#tv-<code>`) is a full-screen chalkboard for a big screen: tables in play with live scores and what's coming up on the left, the bracket (and qualifying table) on the right, and at the bottom a QR code to the tournament with "Scan if you want to register the score of a game". It refreshes every 4 s and asks the screen to stay awake. Still not built: correcting a single result other than by undo.
+- **Venues and tables (25 Oct 2026):** Solo, Duo and Tournament setup pick the venue from a dropdown ("No venue" allowed); the organiser adds venues in the Menu. In a tournament's Edit form each table has a name (blank = "Table n"; `tableNames` on `PATCH /tournaments/{id}`), a **Remove** button while its match hasn't started (`removeTable`: its match goes back in the queue, the phone on it loses it, and table ids don't shift) and **Put back** (`restoreTable`); **Add a table** raises the count. At least one table always stays. Table names show on the phones and the TV screen.
 
 ### 4.6 Offline and poor Wi-Fi
 - The scoring phone keeps working offline. Turns are queued locally with client-generated IDs so retries are idempotent, then sent in order when the connection returns.
@@ -270,7 +272,7 @@ The browser must **never** hold AWS credentials or talk to DynamoDB directly.
 
 ### 4.8 Suggested API (refine during build)
 - **Players:** `GET /players`, `POST /players` (anyone), `PATCH /players/{id}` (organiser), `DELETE /players/{id}` (organiser), `POST /players/{id}/merge` (organiser), `GET /players/{id}/stats?venue=`
-- **Venues:** `GET /venues`, `POST /venues` (anyone), `PATCH`/`DELETE /venues/{id}` (organiser)
+- **Venues:** `GET /venues`, `POST /venues` (organiser), `PATCH`/`DELETE /venues/{id}` (organiser)
 - **Games:** `POST /games`, `GET /games/{id}`, `POST /games/{id}/turns` (body includes the expected turn index and a client turn ID), `DELETE /games/{id}/turns/last`
 - **Organiser:** `POST /auth/organiser` (returns a token)
 - **Tournaments:**
@@ -367,7 +369,7 @@ REQUIREMENTS.md      this file
 1. ~~GoDaddy plan~~ **Decided: GoDaddy Managed WordPress.** See section 5.4.
 2. **Decided:** anyone can add players. The organiser can tidy up (rename, merge, delete).
 3. **Decided:** a single organiser password is enough.
-4. **Decided:** every game records the pub/venue (shared list, anyone can add).
+4. **Decided:** every game records the pub/venue (shared list, optional; only the organiser adds venues since 25 Oct 2026).
 5. **Decided:** guest names are allowed. Their games are saved, but guests get no stats unless later linked to a registered player.
 6. **Decided:** when the player count is not a power of two, the organiser chooses between a **Qualifying round** and **Byes** (round 1 only, random). Built into the app on 22 Oct 2026; see section 3.1.
 7. **Decided (23 Oct 2026):** if the API cannot be reached, the app falls back to Phase 1 local mode so a game never stops.

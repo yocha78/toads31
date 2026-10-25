@@ -56,7 +56,11 @@ window.ToadsApi=(()=>{
     // → {item, created}, {offline:true} or {error}. An existing name comes back as that item.
     async add(kind,body){
       const one=kind.slice(0,-1);let r;
-      try{r=await call("POST","/"+kind,body)}catch(e){return{offline:true}}
+      // Venues are added by the organiser only
+      const o=kind==="venues"?this.organiser():null;
+      if(kind==="venues"&&!o)return{error:"organiser login needed",expired:true};
+      try{r=await call("POST","/"+kind,body,o&&o.token)}catch(e){return{offline:true}}
+      if(r.status===401&&o){this.logout();return{error:"organiser login needed",expired:true}}
       if((r.status===201||r.status===409)&&r.data&&r.data[one]){
         const item=r.data[one];keep(kind,cached(kind).filter(x=>x.id!==item.id).concat([item]));
         return {item,created:r.status===201};
@@ -83,6 +87,13 @@ window.ToadsApi=(()=>{
       let r;try{r=await call(method,"/tournaments"+path,body,o&&o.token)}catch(e){return{offline:true}}
       if(r.status===401&&o){this.logout();r.expired=true}
       return r;
+    },
+    // Organiser: DELETE a game, a player's games or every game (path as in the API) → {deleted} | {error} | {offline}
+    async gamesDelete(path){
+      const o=this.organiser();if(!o)return{error:"organiser login needed",expired:true};
+      let r;try{r=await call("DELETE",path,undefined,o.token)}catch(e){return{offline:true}}
+      if(r.status===401){this.logout();return{error:"organiser login needed",expired:true}}
+      return r.status===200&&r.data?{deleted:r.data.deleted}:{error:(r.data&&r.data.error)||`Something went wrong (${r.status})`,data:r.data,status:r.status};
     },
     // kind "players"|"venues"; method PATCH|DELETE, or POST with suffix "/merge" → {item} | {error} | {offline}
     async tidy(method,kind,id,body,suffix=""){

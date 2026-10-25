@@ -13,8 +13,9 @@ function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 function load(){try{const v=JSON.parse(localStorage.getItem(KEY));if(v&&Array.isArray(v.players))S=Object.assign(S,v)}catch(e){}}
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
 
-// The tournament on screen: a live one this phone follows (S.live, online only), or the local one (S.tour)
-const TOUR=()=>S.live&&S.live.tour?S.live.tour:S.tour;
+// The tournament on screen: the TV screen's, a live one this phone follows (S.live, online only), or the local one (S.tour)
+let TV=null; // {id, name, venue, status, ver, tour, seen, offline, error} while the page is a TV screen (#tv-<code>)
+const TOUR=()=>TV&&TV.tour?TV.tour:S.live&&S.live.tour?S.live.tour:S.tour;
 const isTour=()=>!!(S.live&&S.live.tour)||(S.mode==="tournament"&&!!S.tour);
 // ri -1 = qualifying round, 0.. = knockout rounds
 const matchAt=(ri,mi)=>ri<0?(TOUR().quali||{matches:[]}).matches[mi]||null:(TOUR().rounds[ri]||[])[mi]||null;
@@ -29,6 +30,7 @@ const settle=()=>Toads.settle(TOUR());
 const all=()=>Toads.allMatches(TOUR());
 const assignTables=()=>Toads.assignTables(TOUR());
 const roundName=ri=>Toads.roundName(TOUR(),ri);
+const tname=k=>Toads.tableName(TOUR(),k), TN=k=>esc(tname(k));
 // Team wins are kept apart from player wins, in case a team shares a player's name
 const winKey=(g,name)=>g&&g.members?"team:"+name:name;
 function matchWins(name){
@@ -39,8 +41,13 @@ function matchWins(name){
 
 /* ---------- rendering ---------- */
 function render(){
-  for(const id of["setup","orderView","bracketView","game","win","playersView","statsView"])$(id).hidden=true;
-  const views={setup:["setup",renderSetup],players:["playersView",renderPlayers],stats:["statsView",renderStats],order:["orderView",renderOrder],bracket:["bracketView",renderHub],game:["game",renderGame],win:["win",renderWin]};
+  // A TV screen shows nothing else, and leaves this phone's own state alone
+  $("tvView").hidden=!TV;$("app").hidden=!!TV;
+  document.body.classList.toggle("tvmode",!!TV);
+  if(TV){renderTV();return}
+  for(const id of["setup","orderView","bracketView","game","win","playersView","statsView","menuView","toursView"])$(id).hidden=true;
+  const views={setup:["setup",renderSetup],menu:["menuView",renderMenu],tours:["toursView",renderTours],players:["playersView",renderPlayers],stats:["statsView",renderStats],order:["orderView",renderOrder],bracket:["bracketView",renderHub],game:["game",renderGame],win:["win",renderWin]};
+  $("menuBtn").hidden=!NET.on||["menu","players","stats","tours"].includes(S.stage);
   if(S.live&&["game","win","order"].includes(S.stage)&&(!M()||!scoring()&&(S.stage!=="game"||!G()||G().done))){S.focus=null;S.ord=null;S.stage="bracket"}
   const v=views[S.stage];
   if(!v){S.stage="setup";return render()}
@@ -72,7 +79,6 @@ function renderSetup(){
   $("noPlayers").hidden=n>0;
   $("noPlayers").textContent=T?"Add at least two players.":D?"Add players, then put them into teams of two below.":"Add one or more players.";
   $("shuffleBtn").hidden=!(T&&n>2);
-  $("statsBtn").hidden=!NET.on;
   if(NET.on)renderOnline();
   if(NET.on)renderLiveSetup();
   setupStart();
@@ -86,7 +92,7 @@ function renderLiveSetup(){
   $("liveCreate").hidden=!T||!org;
   $("liveOn").checked=!!S.liveOn;
   $("liveFields").hidden=!S.liveOn;
-  $("liveHint").textContent=!T?"":!org?"To run a live tournament that everyone follows and scores from their own phones, log in as organiser on the Players & stats screen."
+  $("liveHint").textContent=!T?"":!org?"To run a live tournament that everyone follows and scores from their own phones, log in as organiser in the Menu (top right)."
     :S.liveOn?"Each table is scored from a phone at the table, after entering the PIN. Share the PIN only with the scorers.":"";
   $("liveHint").hidden=!$("liveHint").textContent;
   $("liveMsg").textContent=NET.liveMsg||"";
@@ -122,13 +128,13 @@ const regBtn=(p,i)=>NET.on&&!findIn(NET.players,p)?`<button class="x reg" data-r
 async function loadDirectory(){
   const [pl,vn]=await Promise.all([ToadsApi.list("players"),ToadsApi.list("venues")]);
   NET.players=pl.items;NET.venues=vn.items;NET.fresh=pl.fresh&&vn.fresh;
-  if(NET.fresh)shareVenue();
   if(["setup","players","stats"].includes(S.stage))render();
 }
 function renderOnline(){
   $("venueBox").hidden=false;
-  if(document.activeElement!==$("venueInput"))$("venueInput").value=S.venue||"";
-  $("venueOptions").innerHTML=NET.venues.slice().sort(byName).map(v=>`<option value="${esc(v.name)}">${v.area?esc(v.area):""}</option>`).join("");
+  // A venue the organiser has since deleted drops out once the list is fresh
+  if(S.venue&&NET.fresh&&!findIn(NET.venues,S.venue)){S.venue="";save()}
+  if(document.activeElement!==$("venueSelect"))$("venueSelect").innerHTML=venueOptions(S.venue);
   $("nameInput").setAttribute("list","playerOptions");
   const free=NET.players.filter(p=>!S.players.some(x=>nameKey(x)===nameKey(p.name))).sort(byName);
   $("playerOptions").innerHTML=free.map(p=>`<option value="${esc(p.name)}"></option>`).join("");
@@ -180,13 +186,199 @@ function renderPlayers(){
   $("dirList").innerHTML=list.map(p=>`<button type="button" data-stats="${esc(p.id)}">${esc(p.name)}</button>`).join("");
   $("playersHint").textContent=list.length?"Tap a player to see their stats."+(NET.fresh?"":" (Offline: last saved list.)")
     :NET.fresh?"No registered players yet. Register players from the setup screen.":"Can't reach the players list right now.";
+}
+// The menu (top right): players & stats, tournaments, and the organiser's login and tidy-up
+function renderMenu(){
   const org=ToadsApi.organiser();
   $("orgLogin").hidden=!!org;$("orgOn").hidden=!org;
   if(org)$("venueAdmin").innerHTML=NET.venues.slice().sort(byName).map(v=>`<li data-venue="${esc(v.id)}">
     <input type="text" value="${esc(v.name)}" maxlength="60" aria-label="Venue name"><button class="x" data-vsave>Save</button><button class="x" data-vdel>${NET.armed==="venue:"+v.id?"Tap again to delete":"Delete"}</button></li>`).join("")||`<li class="hint">No venues yet.</li>`;
+  $("wipeYes").disabled=$("wipeInput").value.trim()!=="DELETE";
 }
+function openMenu(){
+  if(!["menu","players","stats","tours"].includes(S.stage))S.menuFrom=S.stage;
+  S.stage="menu";$("wipeConfirm").hidden=true;render();loadDirectory();window.scrollTo(0,0);
+}
+// Back from the menu to whatever was on screen, if it still makes sense
+function closeMenu(){
+  let st=S.menuFrom||"setup";
+  if(["game","win"].includes(st)&&!G())st=isTour()?"bracket":"setup";
+  if(st==="order"&&!S.ord)st=isTour()?"bracket":"setup";
+  if(st==="bracket"&&!isTour())st="setup";
+  S.stage=st;render();window.scrollTo(0,0);
+}
+
+/* ---------- tournament management (online; editing needs the organiser) ---------- */
+async function loadTours(){
+  NET.toursMsg=NET.toursMsg||"";
+  const r=await ToadsApi.tour("GET","?all=1");
+  NET.tours=r.status===200&&r.data?r.data.tournaments:null;
+  NET.toursOffline=!!r.offline;
+  if(S.stage==="tours")render();
+}
+function openTours(){S.stage="tours";NET.tours=NET.tours||null;NET.tourAct=null;NET.toursMsg="";render();loadTours();window.scrollTo(0,0)}
+const tvUrl=id=>location.origin+location.pathname+"#tv-"+id;
+const statusText=t=>t.status==="ended"?"Ended":t.champion?`Won by ${t.champion}`:"Live";
+function renderTours(){
+  const org=!!ToadsApi.organiser(), list=NET.tours, a=NET.tourAct||{};
+  $("toursHint").textContent=!list?(NET.toursOffline?"No signal, so the tournaments can't be listed. Try again in a moment.":"Loading…")
+    :!list.length?"No live tournaments yet. Start one from the Tournament tab on the setup screen (organiser).":
+    org?"Open one to follow it, put it on a TV screen, or edit, restart or delete it.":"Open one to follow it, or put it on a TV screen. Log in as organiser in the Menu to edit, restart or delete one.";
+  $("toursMsg").textContent=NET.toursMsg||"";
+  $("toursMsg").className="msg"+(/^(Can't|No signal|That)/.test(NET.toursMsg||"")?" bad":NET.toursMsg?" good":"");
+  $("toursList").innerHTML=(list||[]).map(t=>{
+    const on=a.id===t.id, id=esc(t.id);
+    let extra="";
+    if(on&&a.kind==="edit"){
+      const d=a.data, names=d?drawNames(d.tour):[], maxT=Math.max(1,Math.min(MAX_TABLES,Math.floor(t.players/2)));
+      extra=d?`<form class="touredit" data-edit="${id}">
+        <label>Name<input type="text" name="name" value="${esc(d.name)}" maxlength="40" autocomplete="off"></label>
+        <label>Venue<select name="venue">${venueOptions(d.venue)}</select></label>
+        <div class="tedit"><span>Tables</span>${tableRows(d.tour)}
+          ${d.tour.tables<maxT?`<button type="button" class="link" data-tbl="add">Add a table</button>`:""}</div>
+        <label>New scoring PIN<input type="text" name="pin" inputmode="numeric" pattern="[0-9]*" maxlength="8" placeholder="Leave empty to keep it" autocomplete="off"></label>
+        <label>Correct a player's name<span class="row"><select name="from"><option value="">Player…</option>${names.map(n=>`<option>${esc(n)}</option>`).join("")}</select><input type="text" name="to" maxlength="24" placeholder="New name" autocomplete="off"></span></label>
+        <div class="actions"><button type="button" data-cancel>Cancel</button><button class="primary" type="submit">Save</button></div></form>`
+        :`<p class="hint">Loading…</p>`;
+    }
+    if(on&&(a.kind==="restart"||a.kind==="delete"))extra=`<div class="confirm">
+      <span>${a.kind==="restart"?`Start ${esc(t.name)} again from the draw? Every result goes, and phones scoring a table give it up.`:`Delete ${esc(t.name)} for everyone? Phones following it lose it. This can't be undone.`}</span>
+      <label class="check"><input type="checkbox" data-games${a.kind==="restart"?" checked":""}> Also take its saved games out of the players' stats</label>
+      <div class="actions"><button type="button" data-cancel>Cancel</button><button class="primary" type="button" data-yes="${a.kind}">${a.kind==="restart"?"Restart":"Delete"}</button></div></div>`;
+    if(on&&a.kind==="end")extra=`<div class="confirm"><span>End ${esc(t.name)} for everyone? Scoring stops, and the results stay visible.</span>
+      <div class="actions"><button type="button" data-cancel>Cancel</button><button class="primary" type="button" data-yes="end">End tournament</button></div></div>`;
+    return `<div class="tourcard" data-tour="${id}">
+      <div class="tn"><b>${esc(t.name)}</b><span class="pill${t.status==="live"&&!t.champion?"":" idle"}">${esc(statusText(t))}</span></div>
+      <div class="ti">${t.venue?esc(t.venue)+" · ":""}${fmtDate(t.created)} · ${t.players} players · ${t.tables} table${t.tables===1?"":"s"} · code ${id}</div>
+      ${matchPlan(t)}
+      <div class="actions"><button type="button" class="primary" data-open>Open</button><a class="btn" href="${esc(tvUrl(t.id))}" target="_blank" rel="noopener">TV screen</a></div>
+      ${org?`<div class="tclaim"><button type="button" class="link" data-act="edit">Edit</button><button type="button" class="link" data-act="restart">Restart</button>${t.status==="live"?`<button type="button" class="link" data-act="end">End</button>`:""}<button type="button" class="link" data-act="delete">Delete</button></div>`:""}
+      ${extra}</div>`;
+  }).join("");
+}
+// How many matches a tournament has: per round, in total, and per table (each match is 2 or 3 games)
+function matchPlan(t){
+  const tour=Toads.buildTour(Array.from({length:t.players},(_,i)=>"p"+i),t.tables,t.format==="byes"?"byes":"quali",()=>0);
+  const rounds=[...(tour.quali?[["Qualifying",tour.quali.matches.length]]:[]),...tour.rounds.map((r,ri)=>[Toads.roundName(tour,ri),r.filter(m=>!m.bye).length])];
+  const total=rounds.reduce((a,r)=>a+r[1],0), per=total/t.tables;
+  return `<div class="plan"><span>${rounds.map(([n,k])=>`${esc(n)} <b>${k}</b>`).join(" · ")}</span>
+    <span><b>${total}</b> matches in total (${total*2} to ${total*3} games) · about <b>${Number.isInteger(per)?per:`${Math.floor(per)}–${Math.ceil(per)}`}</b> per table with ${t.tables} table${t.tables===1?"":"s"}${t.played!=null?` · <b>${t.played}</b> played, ${total-t.played} to go`:""}</span></div>`;
+}
+// Every player in a tournament, in draw order
+const drawNames=t=>t.quali?t.quali.draw.slice():t.rounds[0].flatMap(m=>[m.a,m.b]).filter(Boolean);
+function tourDone(msg,ok){NET.toursMsg=msg;NET.tourAct=ok?null:NET.tourAct;loadTours();render()}
+const failMsg=(r,what)=>r.offline?"No signal. Try again in a moment.":r.expired?"Your organiser login has run out. Log in again in the Menu.":`Can't ${what}: ${(r.data&&r.data.error)||r.error||r.status}.`;
+async function tourAction(id,kind,el){
+  const t=(NET.tours||[]).find(x=>x.id===id);if(!t)return;
+  if(kind==="restart"||kind==="delete"){
+    const withGames=!!(el.closest(".confirm").querySelector("[data-games]")||{}).checked;
+    const r=kind==="restart"?await ToadsApi.tour("POST",`/${id}/restart`,{keepGames:!withGames},"required")
+      :await ToadsApi.tour("DELETE",`/${id}`+(withGames?"?games=delete":""),undefined,"required");
+    const n=r.data&&r.data.gamesDeleted, games=n?` ${n} saved game${n===1?"":"s"} taken out of the stats.`:"";
+    if(r.status===200){
+      if(S.live&&S.live.id===id){if(kind==="delete"){S.live=null;setHash(null)}else liveFetch(true)}
+      tourDone(kind==="restart"?`${t.name} starts again from the draw.${games}`:`Deleted ${t.name}.${games}`,true);
+    }else tourDone(failMsg(r,kind==="restart"?"restart it":"delete it"),false);
+  }
+  if(kind==="end"){
+    const r=await ToadsApi.tour("POST",`/${id}/end`,{},"required");
+    if(r.status===200&&S.live&&S.live.id===id)liveFetch(true);
+    tourDone(r.status===200?`${t.name} has ended. Everyone can still see the results.`:failMsg(r,"end it"),r.status===200);
+  }
+}
+async function startEdit(id){
+  NET.tourAct={id,kind:"edit",data:null};render();
+  const r=await ToadsApi.tour("GET","/"+id);
+  if(!NET.tourAct||NET.tourAct.id!==id)return;
+  if(r.status===200&&r.data&&r.data.tournament)NET.tourAct.data=r.data.tournament;
+  else{NET.tourAct=null;NET.toursMsg=failMsg(r,"open it")}
+  render();
+}
+async function saveEdit(form){
+  const id=form.dataset.edit, d=NET.tourAct&&NET.tourAct.data;if(!d)return;
+  const f=k=>form.elements[k].value.replace(/\s+/g," ").trim(), body={};
+  if(f("name")!==d.name)body.name=f("name");
+  if(f("venue")!==(d.venue||""))body.venue=f("venue")||null;
+  const names={};
+  for(let k=0;k<d.tour.tables;k++){const el=form.elements["tname"+k];if(!el)continue;const v=el.value.replace(/\s+/g," ").trim();if(v!==((d.tour.names||{})[k]||""))names[k]=v}
+  if(Object.keys(names).length)body.tableNames=names;
+  if(f("pin"))body.pin=f("pin");
+  if(f("from")&&f("to"))body.rename={from:f("from"),to:f("to")};
+  if(!Object.keys(body).length){NET.tourAct=null;render();return}
+  const r=await ToadsApi.tour("PATCH","/"+id,body,"required");
+  if(r.status===200){
+    if(S.live&&S.live.id===id){if(body.pin)S.live.pin=body.pin;liveFetch(true)}
+    tourDone(`Saved ${body.name||d.name}.`,true);
+  }else{NET.toursMsg=failMsg(r,"save it");render()}
+}
+
+/* ---------- TV screen (#tv-<code>): tables and what's next on the left, the bracket on the right ---------- */
+let tvTimer=null, wake=null;
+async function openTV(id){
+  TV={id,tour:null};render();
+  await tvFetch(true);
+  if(!tvTimer)tvTimer=setInterval(()=>{if(TV&&document.visibilityState==="visible")tvFetch(false)},LIVE_POLL);
+  keepAwake();
+}
+function closeTV(){TV=null;clearInterval(tvTimer);tvTimer=null;try{wake&&wake.release()}catch(e){}wake=null;render()}
+// Ask the screen not to go to sleep (where the browser allows it)
+async function keepAwake(){try{if(TV&&navigator.wakeLock&&document.visibilityState==="visible")wake=await navigator.wakeLock.request("screen")}catch(e){}}
+async function tvFetch(full){
+  const T=TV;if(!T)return;
+  const r=await ToadsApi.tour("GET",`/${T.id}`+(full||!T.tour?"":`?since=${T.ver}`));
+  if(TV!==T)return;
+  T.offline=!!r.offline;
+  if(r.status===404){T.tour=null;T.error="This tournament doesn't exist (or was deleted)."}
+  else if(r.status===200&&r.data&&r.data.tournament){Object.assign(T,r.data.tournament,{error:null,seen:Date.now()})}
+  else if(r.status===200&&r.data&&r.data.same)T.seen=Date.now();
+  else if(!T.tour)T.error=r.offline?"No signal. Trying again…":"Can't open the tournament right now. Trying again…";
+  render();
+}
+function renderTV(){
+  const T=TV, t=T.tour;
+  $("tvMsg").hidden=!(T.error||!t);
+  $("tvMsg").textContent=T.error||"Opening the tournament…";
+  $("tvMain").hidden=!t;
+  $("tvTitle").textContent=t?T.name:"Toads 31";
+  $("tvInfo").textContent=t?[T.venue,T.status==="ended"?"Ended":t.champion?"Finished":"Live",T.offline?"no signal, last scores shown":null].filter(Boolean).join(" · "):"";
+  const url=location.origin+location.pathname+"#t-"+T.id;
+  $("tvLink").textContent=url.replace(/^https?:\/\//,"");
+  drawQr(url,"tvQr");
+  if(!t)return;
+  Toads.settle(t);
+  const list=all(), on=list.filter(({m})=>m.table!=null&&!m.winner).sort((x,y)=>x.m.table-y.m.table);
+  $("tvNow").innerHTML=on.map(({m,ri})=>{
+    const g=m.game&&!m.game.done?m.game:null, k=m.table, claimed=T.claims&&T.claims[k];
+    const side=(name,w)=>{const i=g?g.gp.indexOf(name):-1;return `<div class="tvp${g&&g.cur===i?" up":""}"><span>${esc(name)}</span><i>${w}</i><b>${g?ringIf(g.rem[i]):""}</b></div>`};
+    return `<div class="tvtable${g?" playing":""}"><div class="tvtn"><span>${TN(k)}</span><span>${roundName(ri)} · game ${gameNo(m)}</span></div>
+      ${side(m.a,m.wa)}${side(m.b,m.wb)}
+      <div class="tvst">${g?`${esc(throwerOf(g,g.cur))} to throw · round ${g.round}`:claimed?"Ready to start":"Ready: scan the code to score this table"}</div></div>`;
+  }).join("")||`<p class="tvnone">${t.champion?"All games played.":"No games on the tables right now."}</p>`;
+  // Coming up: matches still to be played that have no table yet, earliest round first
+  const waiting=list.filter(({m})=>!m.winner&&!m.bye&&m.table==null&&m.a&&m.b), next=waiting.slice(0,6);
+  $("tvNextHead").hidden=!next.length;
+  $("tvNext").innerHTML=next.map(({m,ri})=>`<li><span>${esc(m.a)} v ${esc(m.b)}</span><i>${roundName(ri)}</i></li>`).join("")+(waiting.length>6?`<li><i>and ${waiting.length-6} more</i></li>`:"");
+  $("tvChamp").innerHTML=t.champion?`<div class="tvchamp">${TOAD}<div><span>Champion</span><b>${esc(t.champion)}</b></div></div>`:"";
+  // While qualifying is on, its table fills the board; the knockout appears once it is complete,
+  // and a small button switches back to the final qualifying table (T.showQuali)
+  const done=!!t.quali&&qualiDone(), quali=t.quali&&(!done||T.showQuali);
+  $("tvSwitch").hidden=!done;
+  $("tvSwitch").textContent=quali?"Show the knockout":"Show qualifying";
+  $("tvQuali").innerHTML=quali?qualiHTML(true):"";
+  $("tvBracket").innerHTML=quali?`<p class="tvlater">${done?`Qualifying is complete: the top ${t.quali.K} play the knockout,`:`Then the top ${t.quali.K} play a knockout:`} ${t.rounds.map((_,ri)=>roundName(ri).toLowerCase()).join(", ")}.</p>`:bracketHTML();
+  fitTV();
+}
+// Everything stays on one screen: shrink the text of a side until it fits (no scrolling on a TV)
+function fitTV(){
+  for(const el of document.querySelectorAll(".tvgames,.tvboard")){
+    let px=parseFloat(getComputedStyle($("tvView")).fontSize);
+    el.style.fontSize=px+"px";
+    while(px>7&&(el.scrollHeight>el.clientHeight+1||el.scrollWidth>el.clientWidth+1)){px*=.94;el.style.fontSize=px+"px"}
+  }
+}
+
 function renderStats(){
-  const key=S.statsId+"|"+(S.statsVenue||""), d=NET.statsKey===key?NET.stats:null, known=NET.players.find(p=>p.id===S.statsId);
+  const org=ToadsApi.organiser(), key=S.statsId+"|"+(S.statsVenue||""), d=NET.statsKey===key?NET.stats:null, known=NET.players.find(p=>p.id===S.statsId);
   if(NET.statsKey!==key)loadStats(key);
   $("statsName").textContent=d&&d.player?d.player.name:known?known.name:"";
   const bad=d&&(d.offline||d.error);
@@ -211,10 +403,12 @@ function renderStats(){
       ${d.tournaments.map(t=>`<tr><td>${esc(t.name)} <span class="hint">${fmtDate(t.last)}</span></td><td class="n">${t.played}</td><td class="n">${t.won}</td></tr>`).join("")}</table>`:""}
       ${d.headToHead.length?`<h2>Head to head</h2><table class="st"><tr><th>Against</th><th class="n">Played</th><th class="n">Won</th><th class="n">Lost</th></tr>
       ${d.headToHead.map(o=>`<tr><td>${esc(o.name)}${o.playerId?"":' <span class="tag">guest</span>'}</td><td class="n">${o.played}</td><td class="n">${o.won}</td><td class="n">${o.lost}</td></tr>`).join("")}</table>`:""}
-      <h2>Latest games</h2><table class="st"><tr><th>Date</th><th>Pub</th><th>Result</th><th class="n">Avg</th></tr>
-      ${d.recent.map(g=>`<tr><td>${fmtDate(g.finished)}</td><td>${esc(g.venue||"–")}</td><td class="${g.won?"res-w":"res-l"}">${g.won?"Won":g.winner?esc(g.winner)+" won":"Lost"}${g.sides>1?"":" (solo)"}</td><td class="n">${fmtAvg(g.avg)}</td></tr>`).join("")}</table>`;
+      <h2>${NET.allGames?"All games":"Latest games"}</h2><table class="st"><tr><th>Date</th><th>Pub</th><th>Result</th><th class="n">Avg</th>${org?"<th></th>":""}</tr>
+      ${d.recent.slice(0,NET.allGames?undefined:10).map(g=>`<tr><td>${fmtDate(g.finished)}</td><td>${esc(g.venue||"–")}${g.tournament?` <span class="hint">· ${esc(g.tournament)}</span>`:""}</td><td class="${g.won?"res-w":"res-l"}">${g.won?"Won":g.winner?esc(g.winner)+" won":"Lost"}${g.sides>1?"":" (solo)"}</td><td class="n">${fmtAvg(g.avg)}</td>${org?`<td class="n"><button type="button" class="x" data-delgame="${esc(g.gameId)}">${NET.armed==="game:"+g.gameId?"Tap again":"Delete"}</button></td>`:""}</tr>`).join("")}</table>
+      ${(d.count||d.recent.length)>10?`<button type="button" class="ghost" id="allGamesBtn">${NET.allGames?"Show the latest 10":`Show all ${d.count||d.recent.length} games`}</button>`:""}
+      ${org?`<p class="hint">Deleting a game takes it out of the stats of everyone who played in it.</p>`:""}`;
   }
-  const org=ToadsApi.organiser(), p=d&&d.player;
+  const p=d&&d.player;
   $("statsOrg").hidden=!(org&&p);
   if(org&&p){
     if(document.activeElement!==$("renameInput")&&NET.renameFor!==p.id){$("renameInput").value=p.name;NET.renameFor=p.id}
@@ -229,13 +423,13 @@ async function loadStats(key){
   if(S.stage==="stats")render();
 }
 const reloadStats=()=>{NET.statsKey=null;render()};
-function showPlayer(id){NET.statsNote=null;S.statsId=id;S.statsVenue="";NET.statsKey=null;NET.renameFor=null;$("statsConfirm").hidden=true;S.stage="stats";render();window.scrollTo(0,0)}
+function showPlayer(id){NET.statsNote=null;NET.allGames=false;NET.armed=null;S.statsId=id;S.statsVenue="";NET.statsKey=null;NET.renameFor=null;$("statsConfirm").hidden=true;S.stage="stats";render();window.scrollTo(0,0)}
 // Ask before a merge or delete; the answer runs fn
 function confirmStats(text,fn){$("statsConfirmText").textContent=text;$("statsConfirm").hidden=false;NET.onConfirm=fn}
 function tidyResult(r,okMsg,el){
   const msg=$(el);
   if(r.item||r.moved!=null){msg.textContent=okMsg;msg.className="msg good";return true}
-  msg.textContent=r.offline?"No signal. Try again in a moment.":r.expired?"Your organiser login has run out. Log in again on the Players screen.":`That didn't work: ${r.error}.`;
+  msg.textContent=r.offline?"No signal. Try again in a moment.":r.expired?"Your organiser login has run out. Log in again in the Menu.":`That didn't work: ${r.error}.`;
   msg.className="msg bad";return false;
 }
 // A renamed or merged player: use the new name in the game being set up
@@ -245,21 +439,34 @@ function renamePlayer(from,to){
   S.teams.forEach(t=>{if(t.a===from)t.a=to;if(t.b===from)t.b=to});
 }
 
-function rememberVenue(){
-  const v=$("venueInput").value.replace(/\s+/g," ").trim(), known=v&&findIn(NET.venues,v);
-  S.venue=known?known.name:v;save();
-  shareVenue();
+// The venue is picked from the organiser's list, and can be left blank. A name that isn't on the
+// list (kept from before) stays selectable so it isn't lost quietly.
+function venueOptions(cur){
+  const list=NET.venues.slice().sort(byName), keep=cur&&!findIn(list,cur);
+  return `<option value="">No venue</option>`+(keep?`<option selected>${esc(cur)}</option>`:"")
+    +list.map(v=>`<option value="${esc(v.name)}"${cur&&nameKey(v.name)===nameKey(cur)?" selected":""}>${esc(v.name)}${v.area?` (${esc(v.area)})`:""}</option>`).join("");
 }
-// Add the venue in use to the shared list if it isn't there yet: when typed, when the lists arrive
-// (a remembered venue may never have reached them) and on Start
-function shareVenue(){
-  const v=S.venue;
-  if(!NET.on||!v||findIn(NET.venues,v)||NET.saving["venue:"+v])return;
-  NET.saving["venue:"+v]=true;
-  ToadsApi.add("venues",{name:v}).then(r=>{
-    delete NET.saving["venue:"+v];
-    if(r.item){NET.venues=NET.venues.filter(x=>x.id!==r.item.id).concat([r.item]);if(r.item.name!==S.venue&&nameKey(r.item.name)===nameKey(S.venue)){S.venue=r.item.name;save()}if(S.stage==="setup")render()}
-  });
+// Edit form: every table, with its name, and Remove (only before its match starts) or Put back
+function tableRows(tour){
+  const off=tour.off||[], active=tour.tables-off.length;
+  return `<ul class="tlist">${Array.from({length:tour.tables},(_,k)=>{
+    const out=off.includes(k), m=Toads.allMatches(tour).find(({m})=>m.table===k&&!m.winner), busy=m&&m.m.game;
+    const act=out?`<button type="button" class="x" data-tbl="restore" data-k="${k}">Put back</button>`
+      :busy?`<span class="hint">Match under way</span>`
+      :active>1?`<button type="button" class="x" data-tbl="remove" data-k="${k}">Remove</button>`:"";
+    return `<li${out?` class="out"`:""}><input type="text" name="tname${k}" value="${esc((tour.names||{})[k]||"")}" placeholder="Table ${k+1}" maxlength="20" aria-label="Name of table ${k+1}"${out?" disabled":""}>${act}</li>`;
+  }).join("")}</ul>`;
+}
+// Remove, put back or add a table straight away, then show the form again with the new state
+async function tableAction(id,kind,k){
+  const d=NET.tourAct&&NET.tourAct.data;if(!d)return;
+  const nm=Toads.tableName(d.tour,k);
+  const body=kind==="add"?{tables:d.tour.tables+1}:kind==="remove"?{removeTable:k}:{restoreTable:k};
+  const r=await ToadsApi.tour("PATCH","/"+id,body,"required");
+  NET.toursMsg=r.status===200?(kind==="add"?`Added Table ${d.tour.tables+1}.`:kind==="remove"?`Took ${nm} out. Its match waits for the next free table.`:`${nm} is back.`)
+    :failMsg(r,kind==="add"?"add a table":kind==="remove"?"remove it":"put it back");
+  if(r.status===200&&S.live&&S.live.id===id)liveFetch(true);
+  loadTours();await startEdit(id);
 }
 
 /* ---------- live tournaments (online only) ---------- */
@@ -280,7 +487,7 @@ function liveTake(t){
   // A phone that lost its table (taken over, released by the organiser) stops scoring it
   for(const k of Object.keys(L.mine))if(!L.claims[k]||L.claims[k].tag!==L.mine[k].tag){
     delete L.mine[k];L.queue=L.queue.filter(x=>x.n!=+k);
-    NET.liveNote=`Table ${+k+1} is now scored on another phone.`;
+    NET.liveNote=`${tname(+k)} is now scored on another phone.`;
   }
 }
 async function follow(id){
@@ -311,7 +518,7 @@ async function createLive(){
     S.liveOn=false;$("liveName").value="";$("livePin").value="";
     setHash(S.live.id);goHub();window.scrollTo(0,0);return;
   }
-  NET.liveMsg=r.offline?"No signal, so the live tournament can't be created. Untick “Run it live” to play it on this phone only.":r.expired?"Your organiser login has run out. Log in again on the Players & stats screen.":`Can't create it: ${(r.data&&r.data.error)||r.status}.`;
+  NET.liveMsg=r.offline?"No signal, so the live tournament can't be created. Untick “Run it live” to play it on this phone only.":r.expired?"Your organiser login has run out. Log in again in the Menu.":`Can't create it: ${(r.data&&r.data.error)||r.status}.`;
   render();
 }
 // Apply a change to this phone's copy, then queue it for the server. → the applyOp result
@@ -334,8 +541,8 @@ async function liveFlush(){
       if(r.status===200){L.queue.shift();save();continue}
       // Refused: another phone changed the table, the claim went, or the tournament ended. Show what the server has.
       L.queue=L.queue.filter(x=>x.n!==n);
-      if(r.status===403){delete L.mine[n];NET.liveNote=`Table ${n+1} is now scored on another phone.`}
-      else NET.liveNote=`Table ${n+1} had moved on, so this phone now shows the latest scores.`;
+      if(r.status===403){delete L.mine[n];NET.liveNote=`${tname(n)} is now scored on another phone.`}
+      else NET.liveNote=`${tname(n)} had moved on, so this phone now shows the latest scores.`;
       if(M()&&M().table===n&&["game","win","order"].includes(S.stage)){S.focus=null;S.ord=null;S.last=null;S.stage="bracket"}
       reload=true;
     }
@@ -373,39 +580,39 @@ function liveStatus(){
 async function claimTable(k,takeover){
   const L=S.live;
   if(!L.pin){NET.pinFor={k,takeover};render();$("pinInput").focus();return}
-  NET.liveNote=`Claiming table ${k+1}…`;render();
+  NET.liveNote=`Claiming ${tname(k)}…`;render();
   const r=await ToadsApi.tour("POST",`/${L.id}/tables/${k}/claim`,{pin:L.pin,takeover:!!takeover});
   if(S.live!==L)return;
   if(r.status===200&&r.data){
     L.mine[k]={token:r.data.token,tag:r.data.tag};NET.pinFor=null;
-    NET.liveNote=`This phone now scores table ${k+1}.`;await liveFetch(true);render();return;
+    NET.liveNote=`This phone now scores ${tname(k)}.`;await liveFetch(true);render();return;
   }
   if(r.status===403){L.pin=null;NET.pinFor={k,takeover};NET.liveNote="Wrong PIN.";}
-  else if(r.status===409&&r.data&&r.data.claimed){NET.liveNote=`Another phone is already scoring table ${k+1}. Tap “Take over” if it has stopped.`;await liveFetch(true)}
+  else if(r.status===409&&r.data&&r.data.claimed){NET.liveNote=`Another phone is already scoring ${tname(k)}. Tap “Take over” if it has stopped.`;await liveFetch(true)}
   else NET.liveNote=r.offline?"No signal. Try again in a moment.":`Can't claim the table: ${(r.data&&r.data.error)||r.status}.`;
   render();
 }
 async function releaseTable(k){
   const L=S.live, c=L.mine[k];
-  if(c&&L.queue.some(x=>x.n===k)){NET.liveNote=`Wait until table ${k+1}'s scores are sent before giving it up.`;render();return}
+  if(c&&L.queue.some(x=>x.n===k)){NET.liveNote=`Wait until ${tname(k)}'s scores are sent before giving it up.`;render();return}
   const r=await ToadsApi.tour("POST",`/${L.id}/tables/${k}/release`,{token:c&&c.token},!c);
   if(S.live!==L)return;
-  if(r.status===200){delete L.mine[k];NET.liveNote=`Table ${k+1} is free for another phone to score.`;await liveFetch(true)}
+  if(r.status===200){delete L.mine[k];NET.liveNote=`${tname(k)} is free for another phone to score.`;await liveFetch(true)}
   else NET.liveNote=r.offline?"No signal. Try again in a moment.":`Can't release the table: ${(r.data&&r.data.error)||r.status}.`;
   render();
 }
 async function endLive(){
   const L=S.live, r=await ToadsApi.tour("POST",`/${L.id}/end`,{},"required");
-  NET.liveNote=r.status===200?"The tournament has ended. Everyone can still see the results.":r.offline?"No signal. Try again in a moment.":r.expired?"Your organiser login has run out. Log in again on the Players & stats screen.":`Can't end it: ${(r.data&&r.data.error)||r.status}.`;
+  NET.liveNote=r.status===200?"The tournament has ended. Everyone can still see the results.":r.offline?"No signal. Try again in a moment.":r.expired?"Your organiser login has run out. Log in again in the Menu.":`Can't end it: ${(r.data&&r.data.error)||r.status}.`;
   if(r.status===200)await liveFetch(true);
   render();
 }
 // QR code for the link, drawn by js/vendor/qrcode.js, loaded the first time it is needed
-function drawQr(url){
-  const box=$("liveQr");
+function drawQr(url,boxId="liveQr"){
+  const box=$(boxId);
   if(box.dataset.url===url)return;
   if(!window.qrcode){
-    if(!document.getElementById("qrLib")){const sc=document.createElement("script");sc.id="qrLib";sc.src=document.querySelector('meta[name="toads-qr"]').content;sc.onload=()=>drawQr(url);document.head.appendChild(sc)}
+    if(!document.getElementById("qrLib")){const sc=document.createElement("script");sc.id="qrLib";sc.src=document.querySelector('meta[name="toads-qr"]').content;sc.onload=()=>render();document.head.appendChild(sc)}
     return;
   }
   const q=qrcode(0,"M");q.addData(url);q.make();
@@ -418,13 +625,14 @@ function renderLivePanel(){
   $("liveTitle").textContent=L.name;
   const org=!!ToadsApi.organiser(), url=location.origin+location.pathname+"#t-"+L.id;
   $("liveNote").textContent=NET.liveNote||"";
-  $("liveNote").className="msg"+(/^(Wrong|Can't|No signal|Another|Table \d+ (is now|had))/.test(NET.liveNote||"")?" bad":"");
+  $("liveNote").className="msg"+(/^(Wrong|Can't|No signal|Another)| is now scored on another phone| had moved on/.test(NET.liveNote||"")?" bad":"");
   $("shareBox").hidden=!NET.shareOpen;
   $("liveShareBtn").setAttribute("aria-expanded",!!NET.shareOpen);
   if(NET.shareOpen){$("liveLink").value=url;drawQr(url)}
+  $("liveTv").href=tvUrl(L.id);
   const p=NET.pinFor;
   $("pinForm").hidden=!p;
-  if(p)$("pinLabel").textContent=`Enter the scoring PIN to ${p.takeover?"take over":"score"} table ${p.k+1}.`;
+  if(p)$("pinLabel").textContent=`Enter the scoring PIN to ${p.takeover?"take over":"score"} ${tname(p.k)}.`;
   $("liveEnd").hidden=!(org&&L.status!=="ended");
   liveStatus();
 }
@@ -482,7 +690,7 @@ function addTeam(){
 
 function renderOrder(){
   const o=S.ord, left=o.pending.filter(p=>!o.order.includes(p)), m=M();
-  $("orderTitle").textContent=m?`Throwing order · Table ${m.table+1} · Game ${gameNo(m)}`:"Throwing order";
+  $("orderTitle").textContent=m?`Throwing order · ${tname(m.table)} · Game ${gameNo(m)}`:"Throwing order";
   $("orderHint").textContent=S.mode==="duo"&&!m
     ?"One player from each team throws a toad. Tap the teams from closest to the hole to furthest away."
     :"Each player throws one toad. Tap the players from closest to the hole to furthest away.";
@@ -509,15 +717,16 @@ function renderHub(){
   const list=all();
   let cards="";
   for(let k=0;k<t.tables;k++){
+    if(!Toads.tableOn(t,k))continue;
     const x=list.find(({m})=>m.table===k&&!m.winner);
     const lc=S.live?liveCard(k,x):null;
     if(!x){
       const more=list.some(({m})=>!m.winner&&!m.bye);
-      cards+=`<div class="tcard free"><div class="tn"><span>Table ${k+1}</span><span class="pill idle">Free</span></div><div class="ti">${more?"Waiting for earlier matches to finish.":"No more matches."}</div>${lc&&more?lc.main+lc.extra:lc&&myTable(k)?lc.extra:""}</div>`;
+      cards+=`<div class="tcard free"><div class="tn"><span>${TN(k)}</span><span class="pill idle">Free</span></div><div class="ti">${more?"Waiting for earlier matches to finish.":"No more matches."}</div>${lc&&more?lc.main+lc.extra:lc&&myTable(k)?lc.extra:""}</div>`;
       continue;
     }
     const {m,ri,mi}=x, g=m.game&&!m.game.done?m.game:null;
-    cards+=`<div class="tcard"><div class="tn"><span>Table ${k+1}</span><span class="pill${g?"":" idle"}">${g?"Playing":"Ready"}</span></div>
+    cards+=`<div class="tcard"><div class="tn"><span>${TN(k)}</span><span class="pill${g?"":" idle"}">${g?"Playing":"Ready"}</span></div>
       <div class="tw">${esc(m.a)} v ${esc(m.b)}</div>
       <div class="ti">${roundName(ri)} · Game ${gameNo(m)}${gameNo(m)>1?` · ${m.wa}–${m.wb}`:""}</div>
       ${g?`<div class="live">${g.gp.map((p,i)=>`${esc(p)} ${g.rem[i]}`).join(" · ")} left</div>`:""}
@@ -529,7 +738,8 @@ function renderHub(){
   const parts=[];
   if(playing)parts.push(`${playing} playing`);
   if(busy.length-playing)parts.push(`${busy.length-playing} ready`);
-  if(t.tables-busy.length)parts.push(`${t.tables-busy.length} free`);
+  const active=t.tables-(t.off||[]).length;
+  if(active-busy.length)parts.push(`${active-busy.length} free`);
   $("tablesSummary").textContent=S.tablesCollapsed?parts.join(" · "):"";
   $("tablesToggle").setAttribute("aria-expanded",!S.tablesCollapsed);
   $("tablesBody").hidden=!!S.tablesCollapsed;
@@ -550,15 +760,19 @@ function renderHub(){
 }
 
 // Qualifying standings on the chalkboard; the top K are above the dashed cut line
-function qualiHTML(){
+function qualiHTML(tv){
   const q=TOUR().quali, st=standings(), done=qualiDone();
   const played=q.matches.filter(m=>m.winner).length;
-  const rows=st.map((r,i)=>`<tr class="${i<q.K?"in":""}${i===q.K-1?" cut":""}"><td>${i+1}</td><td class="nm">${esc(r.name)}</td><td>${r.pl}</td><td>${r.w}</td><td>${r.gw-r.gl>0?"+":""}${r.gw-r.gl}</td><td>${r.toads?r.avg.toFixed(2):"–"}</td></tr>`).join("");
+  const row=(r,i)=>`<tr class="${i<q.K?"in":""}${i===q.K-1?" cut":""}"><td>${i+1}</td><td class="nm">${esc(r.name)}</td><td>${r.pl}</td><td>${r.w}</td><td>${r.gw-r.gl>0?"+":""}${r.gw-r.gl}</td><td>${r.toads?r.avg.toFixed(2):"–"}</td></tr>`;
+  const rows=st.map(row).join(""), thead=`<thead><tr><th>#</th><th class="nm">Player</th><th title="Matches played">Pl</th><th title="Matches won">W</th><th title="Games won minus lost">+/−</th><th title="Average per toad">Avg</th></tr></thead>`;
+  // The TV screen shows the table in two halves side by side
+  if(tv){const h=Math.ceil(st.length/2);return `<div class="qhead"><h3>Qualifying</h3><span>${played} of ${q.matches.length} played · top ${q.K} go through</span></div>
+    <div class="qsplit"><table class="qtab">${thead}<tbody>${st.slice(0,h).map(row).join("")}</tbody></table><table class="qtab">${thead}<tbody>${st.slice(h).map((r,i)=>row(r,i+h)).join("")}</tbody></table></div>`}
   const open=!S.qualiCollapsed;
   const head=`<button type="button" class="qhead" id="qualiToggle" aria-expanded="${open}"><h3>Qualifying</h3><span>${done?`Complete · top ${q.K} go through`:`${played} of ${q.matches.length} matches played · top ${q.K} go through`}</span><i class="chev" aria-hidden="true"></i></button>`;
   if(!open)return head;
   return `${head}
-    <table class="qtab"><thead><tr><th>#</th><th class="nm">Player</th><th title="Matches played">Pl</th><th title="Matches won">W</th><th title="Games won minus lost">+/−</th><th title="Average per toad">Avg</th></tr></thead><tbody>${rows}</tbody></table>
+    <table class="qtab">${thead}<tbody>${rows}</tbody></table>
     <p class="qnote">Ranked by matches won, then games +/−, then average per toad, then head-to-head.</p>`;
 }
 
@@ -572,7 +786,7 @@ function bracketHTML(){
       const cls=m.winner?(m.winner===name?" w":" l"):"";
       return `<div class="bp${cls}"><span>${esc(name)}</span>${m.bye?"":`<span class="s">${w}</span>`}</div>`;
     };
-    return `<div class="bm${live?" now":""}">${live?`<span class="tb">Table ${m.table+1}</span>`:""}${line(m.a,m.wa,false)}${line(m.b,m.wb,true)}</div>`;
+    return `<div class="bm${live?" now":""}">${live?`<span class="tb">${TN(m.table)}</span>`:""}${line(m.a,m.wa,false)}${line(m.b,m.wb,true)}</div>`;
   }).join("")+`</div></div>`).join("");
   if(t.champion)h+=`<div class="bround"><h3>Champion</h3><div class="bmatches"><div class="bm champ"><div class="bp w">${TOAD}<span>${esc(t.champion)}</span></div></div></div></div>`;
   return `<div class="bracket">${h}</div>`;
@@ -584,7 +798,7 @@ function renderGame(){
   const c=coinsFor(g.hist.length,r);
   $("turnNeed").textContent=`${g.members?g.gp[g.cur]+" · ":""}Needs ${r} · ${c} toad${c>1?"s":""} (max ${c*2}) · Round ${g.round}`;
   $("matchInfo").hidden=!m;
-  if(m)$("matchInfo").textContent=`Table ${m.table+1} · ${roundName(S.focus.ri)} · Game ${gameNo(m)} · ${m.a} ${m.wa}–${m.wb} ${m.b}`;
+  if(m)$("matchInfo").textContent=`${tname(m.table)} · ${roundName(S.focus.ri)} · Game ${gameNo(m)} · ${m.a} ${m.wa}–${m.wb} ${m.b}`;
   $("quitBtn").textContent=m?"Back to tables":"End game";
   $("pad").innerHTML=Toads.keypad(c,r).map(({n,bust})=>`<button data-s="${n}" class="${bust?"over":""}" aria-label="Score ${n}${bust?' (bust)':''}">${n}</button>`).join("");
   closeFinish();
@@ -629,18 +843,18 @@ function renderWin(){
   }else if(m.winner&&S.focus.ri<0){
     const q=TOUR().quali, left=q.matches.filter(x=>!x.winner).length;
     $("winLabel").textContent="Qualifying match won";
-    $("winInfo").textContent=`Beats ${L.name===m.a?m.b:m.a} ${hi}–${lo}. `+(left?`${left} qualifying match${left===1?"":"es"} still to play. Table ${m.table+1} is free.`:`Qualifying is complete: the top ${q.K} go into the knockout.`);
+    $("winInfo").textContent=`Beats ${L.name===m.a?m.b:m.a} ${hi}–${lo}. `+(left?`${left} qualifying match${left===1?"":"es"} still to play. ${tname(m.table)} is free.`:`Qualifying is complete: the top ${q.K} go into the knockout.`);
     A.textContent="Back to tables";A.onclick=goHub;
     B.hidden=true;
   }else if(m.winner){
     $("winLabel").textContent="Match won";
-    $("winInfo").textContent=`Beats ${L.name===m.a?m.b:m.a} ${hi}–${lo} and goes through. Table ${m.table+1} is free.`;
+    $("winInfo").textContent=`Beats ${L.name===m.a?m.b:m.a} ${hi}–${lo} and goes through. ${tname(m.table)} is free.`;
     A.textContent="Back to tables";A.onclick=goHub;
     B.hidden=true;
   }else{
     $("winLabel").textContent=`Game ${m.wa+m.wb} won`;
     $("winInfo").textContent=`${m.a} ${m.wa}–${m.wb} ${m.b}. First to 2 games wins the match.`;
-    A.textContent=`Start game ${gameNo(m)}`;A.onclick=()=>{S.last=null;askOrder([m.a,m.b])};
+    A.textContent=`Start game ${gameNo(m)}`;A.onclick=()=>{S.last=null;nextMatchGame(m)};
     B.textContent="Back to tables";B.onclick=goHub;
   }
 }
@@ -730,7 +944,18 @@ function openMatch(ri,mi){
   S.focus={ri,mi};const m=M();
   if(m.game&&!m.game.done){S.stage="game";$("msg").textContent="";render()}
   else if(S.live&&(!myTable(m.table)||S.live.status==="ended"))goHub();
-  else askOrder([m.a,m.b]);
+  else nextMatchGame(m);
+}
+// A match's next game: game 2 swaps game 1's throwing order (no picking); game 1 and game 3 ask for it
+function nextMatchGame(m){
+  const prev=m.game;
+  if(gameNo(m)===2&&prev&&prev.done&&prev.gp.length===2){
+    const order=prev.gp.slice().reverse();
+    beginGame(order);
+    if(S.stage==="game"){$("msg").textContent=`Game 2: order swapped, ${order[0]} throws first.`;$("msg").className="msg good"}
+    return;
+  }
+  askOrder([m.a,m.b]);
 }
 
 // Finishing can need fewer toads than the player had (e.g. 5 with 4 toads: 3 or 4 used).
@@ -837,11 +1062,52 @@ $("playerList").addEventListener("click",e=>{
 if(NET.on){
   $("regChips").addEventListener("click",e=>{const b=e.target.closest("button[data-add]");if(b&&!S.players.includes(b.dataset.add)){S.players.push(b.dataset.add);$("nameInput").value="";NET.note="";render()}});
   $("nameInput").addEventListener("input",()=>renderOnline());
-  $("venueInput").addEventListener("change",rememberVenue);
-  $("startBtn").addEventListener("click",()=>{if(document.activeElement===$("venueInput"))rememberVenue();else shareVenue()});
-  $("statsBtn").addEventListener("click",()=>{S.stage="players";render();loadDirectory();window.scrollTo(0,0)});
-  $("playersBack").addEventListener("click",()=>{S.stage="setup";render()});
-  $("statsBack").addEventListener("click",()=>{S.stage="players";render()});
+  $("venueSelect").addEventListener("change",()=>{S.venue=$("venueSelect").value;save()});
+  $("menuBtn").addEventListener("click",openMenu);
+  $("menuBack").addEventListener("click",closeMenu);
+  $("menuPlayers").addEventListener("click",()=>{S.stage="players";render();loadDirectory();window.scrollTo(0,0)});
+  $("menuTours").addEventListener("click",openTours);
+  $("playersBack").addEventListener("click",()=>{S.stage="menu";render()});
+  $("toursBack").addEventListener("click",()=>{S.stage="menu";render()});
+  $("toursList").addEventListener("click",e=>{
+    const card=e.target.closest("[data-tour]");if(!card)return;
+    const id=card.dataset.tour, act=e.target.closest("[data-act]"), yes=e.target.closest("[data-yes]");
+    if(e.target.closest("[data-open]")){follow(id);return}
+    if(e.target.closest("[data-cancel]")){NET.tourAct=null;render();return}
+    const tb=e.target.closest("[data-tbl]");if(tb){tb.disabled=true;tableAction(id,tb.dataset.tbl,+tb.dataset.k);return}
+    if(yes){tourAction(id,yes.dataset.yes,yes);return}
+    if(act){NET.toursMsg="";if(act.dataset.act==="edit")startEdit(id);else{NET.tourAct={id,kind:act.dataset.act};render()}}
+  });
+  $("toursList").addEventListener("submit",e=>{const f=e.target.closest("form[data-edit]");if(f){e.preventDefault();saveEdit(f)}});
+  $("wipeBtn").addEventListener("click",()=>{$("wipeConfirm").hidden=false;$("wipeInput").value="";render();$("wipeInput").focus()});
+  $("wipeInput").addEventListener("input",()=>{$("wipeYes").disabled=$("wipeInput").value.trim()!=="DELETE"});
+  $("wipeNo").addEventListener("click",()=>{$("wipeConfirm").hidden=true});
+  $("wipeYes").addEventListener("click",async()=>{
+    $("wipeYes").disabled=true;$("orgMsg").textContent="Deleting…";$("orgMsg").className="msg";
+    const r=await ToadsApi.gamesDelete("/games?confirm=all");
+    $("wipeConfirm").hidden=true;$("wipeInput").value="";
+    $("orgMsg").textContent=r.deleted!=null?`Deleted ${r.deleted} saved game${r.deleted===1?"":"s"}.`:failMsg(r,"delete the games");
+    $("orgMsg").className="msg "+(r.deleted!=null?"good":"bad");NET.statsKey=null;render();
+  });
+  $("statsBody").addEventListener("click",async e=>{
+    if(e.target.closest("#allGamesBtn")){NET.allGames=!NET.allGames;render();return}
+    const b=e.target.closest("[data-delgame]");if(!b)return;
+    const id=b.dataset.delgame;
+    if(NET.armed!=="game:"+id){NET.armed="game:"+id;render();return}
+    NET.armed=null;
+    const r=await ToadsApi.gamesDelete("/games/"+encodeURIComponent(id));
+    NET.statsNote=r.deleted!=null?"Game deleted.":null;
+    if(r.deleted!=null)reloadStats();else{$("statsMsg").textContent=failMsg(r,"delete the game");$("statsMsg").className="msg bad"}
+  });
+  $("deleteGamesBtn").addEventListener("click",()=>{
+    const d=NET.stats,p=d&&d.player;if(!p)return;
+    confirmStats(`Delete all of ${p.name}'s saved games? They also leave the stats of everyone who played in them. ${p.name} stays on the list. This can't be undone.`,async()=>{
+      const r=await ToadsApi.gamesDelete(`/players/${encodeURIComponent(p.id)}/games`);
+      if(r.deleted!=null){NET.statsNote=`Deleted ${r.deleted} game${r.deleted===1?"":"s"}.`;reloadStats()}
+      else{$("statsMsg").textContent=failMsg(r,"delete the games");$("statsMsg").className="msg bad"}
+    });
+  });
+  $("statsBack").addEventListener("click",()=>{S.stage="players";NET.armed=null;render()});
   $("dirList").addEventListener("click",e=>{const b=e.target.closest("button[data-stats]");if(b)showPlayer(b.dataset.stats)});
   $("statsVenue").addEventListener("change",()=>{S.statsVenue=$("statsVenue").value;reloadStats()});
   $("orgLogin").addEventListener("submit",async e=>{
@@ -853,6 +1119,13 @@ if(NET.on){
     render();
   });
   $("orgLogout").addEventListener("click",()=>{ToadsApi.logout();$("orgMsg").textContent="Logged out.";$("orgMsg").className="msg";render()});
+  $("venueAddForm").addEventListener("submit",async e=>{
+    e.preventDefault();
+    const name=$("venueAddName").value.replace(/\s+/g," ").trim();if(!name)return;
+    const r=await ToadsApi.add("venues",{name});
+    if(r.item&&r.created){$("venueAddName").value="";$("orgMsg").textContent=`Added ${r.item.name}.`;$("orgMsg").className="msg good";await loadDirectory()}
+    else{$("orgMsg").textContent=r.item?`${r.item.name} is already on the list.`:failMsg(r,"add it");$("orgMsg").className="msg bad";render()}
+  });
   $("venueAdmin").addEventListener("click",async e=>{
     const li=e.target.closest("li[data-venue]");if(!li)return;
     const id=li.dataset.venue, v=NET.venues.find(x=>x.id===id);if(!v)return;
@@ -948,18 +1221,28 @@ if(S.mode==="tournament"||S.live){
 }
 if(["game","win"].includes(S.stage)&&!G())S.stage="setup";
 if(S.stage==="order"&&!S.ord)S.stage=isTour()?"bracket":"setup";
-if(["players","stats"].includes(S.stage)&&(!NET.on||(S.stage==="stats"&&!S.statsId)))S.stage="setup";
+if(["players","stats","menu","tours"].includes(S.stage)&&(!NET.on||(S.stage==="stats"&&!S.statsId)))S.stage="setup";
+if(S.stage==="tours")loadTours();
 render();
 if(NET.on){
   loadDirectory();
   loadLiveList();
-  // A tournament link (#t-<code>) opens that tournament
-  const openHash=()=>{const id=liveHash();if(id&&(!S.live||S.live.id!==id))follow(id)};
+  // A tournament link (#t-<code>) opens that tournament; #tv-<code> turns this page into its TV screen
+  const openHash=()=>{
+    const tv=/^#tv-([A-Z0-9]{6})$/i.exec(location.hash);
+    if(tv){if(!TV||TV.id!==tv[1].toUpperCase())openTV(tv[1].toUpperCase());return}
+    if(TV)closeTV();
+    const id=liveHash();if(id&&(!S.live||S.live.id!==id))follow(id);
+  };
   openHash();window.addEventListener("hashchange",openHash);
-  if(S.live&&!liveHash())setHash(S.live.id);
+  if(S.live&&!liveHash()&&!TV)setHash(S.live.id);
+  $("tvSwitch").addEventListener("click",()=>{if(TV){TV.showQuali=!TV.showQuali;render()}});
+  $("tvExit").addEventListener("click",()=>{try{history.replaceState(null,"",location.pathname+location.search)}catch(e){}closeTV()});
+  document.addEventListener("visibilitychange",()=>{if(TV&&document.visibilityState==="visible"){keepAwake();tvFetch(false)}});
   setInterval(()=>{if(S.live&&document.visibilityState==="visible"){if(S.live.queue.length)liveFlush();else liveFetch(false)}},LIVE_POLL);
   document.addEventListener("visibilitychange",()=>{if(S.live&&document.visibilityState==="visible")liveFlush()});
   window.addEventListener("online",()=>{if(S.live)liveFlush()});
+  window.addEventListener("resize",()=>{if(TV)fitTV()});
   if(S.live)liveFlush();
   window.addEventListener("online",syncGames);
   setInterval(()=>{if(ToadsApi.queued().length)syncGames();else syncNote()},30000);

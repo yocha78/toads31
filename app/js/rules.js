@@ -146,11 +146,14 @@ function assignTables(tour){
   for(const {m} of allMatches(tour)){
     if(!ready(m)||m.table!=null)continue;
     if(busy.has(m.a)||busy.has(m.b))continue;
-    let k=0;while(k<tour.tables&&used.has(k))k++;
+    let k=0;while(k<tour.tables&&(used.has(k)||!tableOn(tour,k)))k++;
     if(k>=tour.tables)break;
     m.table=k;used.add(k);busy.add(m.a);busy.add(m.b);
   }
 }
+// Tables keep their number for good: one the organiser removed stays out (tour.off), and a table can have a name
+const tableOn=(tour,k)=>k>=0&&k<tour.tables&&!(tour.off||[]).includes(k);
+const tableName=(tour,k)=>(tour.names&&tour.names[k])||`Table ${k+1}`;
 function roundName(tour,ri){
   if(ri<0)return "Qualifying";
   const fromEnd=tour.rounds.length-1-ri;
@@ -242,6 +245,6 @@ function gameRecord(g,info){
 }
 
 const Toads={TARGET,TO_WIN,coinsFor,keypad,finishChoices,newG,throwerOf,playTurn,undoTurn,sideStats,playerStats,
-  mk,knockSize,seedOrder,buildTour,standings,qualiDone,settle,allMatches,ready,assignTables,roundName,gameNo,recordGameWin,undoGameWin,matchOf,applyOp,gameRecord};
+  mk,knockSize,seedOrder,buildTour,standings,qualiDone,settle,allMatches,ready,assignTables,roundName,tableOn,tableName,gameNo,recordGameWin,undoGameWin,matchOf,applyOp,gameRecord};
 if(typeof module!=="undefined"&&module.exports)module.exports=Toads;else root.Toads=Toads;
 })(this);

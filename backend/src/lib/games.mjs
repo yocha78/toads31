@@ -6,6 +6,7 @@
 // META is written last, in the same transaction as the summaries, so a game with META is complete.
 import { QueryCommand, TransactWriteCommand, GetCommand, BatchWriteCommand, ScanCommand } from "@aws-sdk/lib-dynamodb";
 import { cleanName, nameKey } from "./http.mjs";
+import { queryAll } from "./directory.mjs";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const MAX_SIDES = 16, MAX_TURNS = 2000, TARGET = 31;
@@ -158,6 +159,35 @@ export async function deleteGame(db, table, id) {
   ].map(Key => ({ DeleteRequest: { Key } }));
   for (let i = 0; i < dels.length; i += 25) await batchWrite(db, table, dels.slice(i, i + 25));
   return true;
+}
+
+// Every saved game's META row (a whole-table scan: fine at pub scale)
+async function allMetas(db, table) {
+  const items = [];
+  let ExclusiveStartKey;
+  do {
+    const r = await db.send(new ScanCommand({
+      TableName: table, FilterExpression: "SK = :m AND begins_with(PK, :g)", ExpressionAttributeValues: { ":m": "META", ":g": "GAME#" }, ExclusiveStartKey,
+    }));
+    items.push(...(r.Items || []));
+    ExclusiveStartKey = r.LastEvaluatedKey;
+  } while (ExclusiveStartKey);
+  return items;
+}
+
+// Organiser clean-up: delete several games, a few at a time. which: "all", {player: id} or {tournament: code}
+// → the number deleted. A game shared by several players goes for all of them.
+export async function deleteGames(db, table, which) {
+  let ids;
+  if (which === "all") ids = (await allMetas(db, table)).map(m => m.id);
+  else if (which.tournament) ids = (await allMetas(db, table)).filter(m => m.tournament && m.tournament.id === which.tournament).map(m => m.id);
+  else ids = [...new Set((await queryAll(db, table, `PLAYER#${which.player}`, "GAME#")).map(g => g.gameId))];
+  let done = 0;
+  for (let i = 0; i < ids.length; i += 5) {
+    const r = await Promise.all(ids.slice(i, i + 5).map(id => deleteGame(db, table, id)));
+    done += r.filter(Boolean).length;
+  }
+  return done;
 }
 
 async function gameItems(db, table, id) {

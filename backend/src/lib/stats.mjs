@@ -67,6 +67,8 @@ export async function playerStats(db, table, id, venueId) {
     best: best ? view(best) : null,
     tournaments: [...tours.values()],
     headToHead: [...h2h.values()].sort((a, b) => b.played - a.played || a.name.localeCompare(b.name)),
-    recent: games.slice(0, 10).map(view),
+    // the app shows the first 10, and the organiser can open the rest to delete one
+    recent: games.slice(0, 200).map(view),
+    count: games.length,
   };
 }

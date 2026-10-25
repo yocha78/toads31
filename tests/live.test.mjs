@@ -183,7 +183,7 @@ test("tournaments: a table is claimed with the PIN, and only that phone scores i
 test("tournaments: two tables score at once, games reach the players' stats, an undone win leaves them", async () => {
   const { h, db } = setup();
   const al = (await call(h, "POST /players", { body: { name: "Al" } })).body.player;
-  await call(h, "POST /venues", { body: { name: "Dover Castle" } });
+  await call(h, "POST /venues", { body: { name: "Dover Castle" }, token: await orgToken(h) });
   const t = (await create(h)).body.tournament;
   const tok = [];
   for (const n of [0, 1]) tok[n] = (await call(h, "POST /tournaments/{id}/tables/{n}/claim", { id: t.id, n, body: { pin: PIN } })).body.token;

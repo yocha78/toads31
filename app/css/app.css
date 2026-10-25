@@ -281,6 +281,12 @@ a.btn:focus-visible{outline:3px solid var(--brass);outline-offset:2px}
 .touredit input,.touredit select{font:inherit;color:var(--ink)}
 .touredit input{padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--surface);min-width:0}
 .touredit .row input{flex:1}
+.tedit{display:flex;flex-direction:column;gap:6px;font-size:.85rem;color:var(--muted)}
+.tedit .link{align-self:flex-start}
+.tlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.tlist li{display:flex;align-items:center;gap:8px}
+.tlist input{flex:1}
+.tlist li.out input{opacity:.5;text-decoration:line-through}
 
 /* TV screen: a big chalkboard for the pub, all on one screen (fitTV shrinks a side whose text doesn't fit).
    Same look in light and dark. Sizes inside are in em so they shrink together. */

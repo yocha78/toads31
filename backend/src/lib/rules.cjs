@@ -72,10 +72,14 @@ function seedOrder(K){let a=[1];while(a.length<K){const m=a.length*2+1;a=a.flatM
 // round-1 byes given to players picked at random. Byes only ever happen in round 1, spread across the
 // bracket (seed positions) so bye players meet round-1 winners where possible.
 // Otherwise, format "quali" (default): a qualifying round first. Players sit in a circle in draw order and each plays
-// the two either side, so everyone plays exactly 2 matches. The top K go into a seeded knockout.
+// the nearest ones on either side, so everyone plays exactly `per` matches (2 by default: one each side; an odd
+// number adds the player straight across the circle, so needs an even number of players). The top K go into
+// a seeded knockout.
 // Each later match takes the winners of two matches above it, so the whole bracket exists from the start.
 // rand is Math.random unless a test passes its own.
-function buildTour(names,tables,format,rand=Math.random){
+// How many qualifying matches each player can play: 1 to 6, fewer than the players, odd only with an even count
+const qualiPers=n=>Array.from({length:Math.max(0,Math.min(6,n-1))},(_,i)=>i+1).filter(m=>m%2===0||n%2===0);
+function buildTour(names,tables,format,rand=Math.random,per=2){
   const n=names.length, K=knockSize(n), byes=K<n&&format==="byes", quali=K<n&&!byes;
   const r0=[];
   if(quali)for(let j=0;j<K/2;j++)r0.push(mk(null,null));
@@ -95,10 +99,15 @@ function buildTour(names,tables,format,rand=Math.random){
   }
   let q=null;
   if(quali){
-    // circle edges, every other one first so several tables can play at once
-    const edges=names.map((p,i)=>[p,names[(i+1)%n],i]);
-    const ordered=[...edges.filter(e=>e[2]%2===0),...edges.filter(e=>e[2]%2===1)];
-    q={matches:ordered.map(([a,b])=>({...mk(a,b),games:[]})),K,draw:names.slice()};
+    if(!qualiPers(n).includes(per))per=2;
+    // circle edges, neighbours first; within each step every other one first so several tables can play at once
+    const ordered=[];
+    for(let d=1;d<=Math.floor(per/2);d++){
+      const edges=names.map((p,i)=>[p,names[(i+d)%n],i]);
+      ordered.push(...edges.filter(e=>e[2]%2===0),...edges.filter(e=>e[2]%2===1));
+    }
+    if(per%2)ordered.push(...names.slice(0,n/2).map((p,i)=>[p,names[i+n/2]]));
+    q={matches:ordered.map(([a,b])=>({...mk(a,b),games:[]})),K,draw:names.slice(),per};
   }
   return {v:2,n,tables:Math.max(1,Math.min(tables,Math.floor(n/2))),rounds,champion:null,quali:q,format:byes?"byes":quali?"quali":"knockout"};
 }
@@ -245,6 +254,6 @@ function gameRecord(g,info){
 }
 
 const Toads={TARGET,TO_WIN,coinsFor,keypad,finishChoices,newG,throwerOf,playTurn,undoTurn,sideStats,playerStats,
-  mk,knockSize,seedOrder,buildTour,standings,qualiDone,settle,allMatches,ready,assignTables,roundName,tableOn,tableName,gameNo,recordGameWin,undoGameWin,matchOf,applyOp,gameRecord};
+  mk,knockSize,seedOrder,qualiPers,buildTour,standings,qualiDone,settle,allMatches,ready,assignTables,roundName,tableOn,tableName,gameNo,recordGameWin,undoGameWin,matchOf,applyOp,gameRecord};
 if(typeof module!=="undefined"&&module.exports)module.exports=Toads;else root.Toads=Toads;
 })(this);

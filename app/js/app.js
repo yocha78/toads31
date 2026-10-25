@@ -72,6 +72,7 @@ function renderSetup(){
   $("formatRow").hidden=!odd;
   $("fmtQuali").setAttribute("aria-pressed",S.tourFormat!=="byes");
   $("fmtByes").setAttribute("aria-pressed",S.tourFormat==="byes");
+  renderPer(T&&odd&&S.tourFormat!=="byes");
   $("tablesVal").textContent=S.tables;
   $("tablesMinus").disabled=S.tables<=1;
   $("tablesPlus").disabled=S.tables>=MAX_TABLES;
@@ -97,6 +98,17 @@ function renderLiveSetup(){
   $("liveHint").hidden=!$("liveHint").textContent;
   $("liveMsg").textContent=NET.liveMsg||"";
 }
+// Qualifying: how many matches each player plays, each choice with the matches per table it makes
+const qualiPer=n=>Toads.qualiPers(n).includes(S.qualiPer)?S.qualiPer:2;
+function tourMatches(n,per){const K=knockSize(n);return {quali:K<n?n*per/2:0,total:(K<n?n*per/2:0)+K-1}}
+const perTable=(total,tables)=>{const x=total/tables;return Number.isInteger(x)?`${x}`:`${Math.floor(x)}–${Math.ceil(x)}`};
+function renderPer(on){
+  $("perRow").hidden=!on;if(!on)return;
+  const n=S.players.length, per=qualiPer(n), tables=Math.max(1,Math.min(S.tables,Math.floor(n/2)));
+  $("perSel").innerHTML=Toads.qualiPers(n).map(m=>`<option value="${m}"${m===per?" selected":""}>${m} (${perTable(tourMatches(n,m).total,tables)} per table)</option>`).join("");
+  const c=tourMatches(n,per);
+  $("perHint").textContent=`${c.quali} qualifying matches, ${c.total} in all with the knockout, on ${tables} table${tables===1?"":"s"}.`+(n%2?" Odd numbers need an even number of players.":"");
+}
 function tourHint(n){
   const base="Knockout, one against one. First to win 2 games takes the match, and winners meet in the next round.";
   if(n<2)return base;
@@ -106,7 +118,8 @@ function tourHint(n){
     const b=K*2-n;
     return `${base} With ${n} players, ${b} player${b===1?"":"s"} picked at random get${b===1?"s":""} a bye and skip round 1. Byes only happen in round 1, so after that everyone plays every round.`+(n===3?" With 3 players that means the bye goes straight to the final.":"");
   }
-  return `${base} With ${n} players there's a qualifying round first: everyone plays 2 matches against the players either side of them in the list, then the top ${K} go into a seeded knockout.`;
+  const per=qualiPer(n);
+  return `${base} With ${n} players there's a qualifying round first: everyone plays ${per} match${per===1?"":"es"} against the players nearest them in the list${per%2?" (and the one straight across)":""}, then the top ${K} go into a seeded knockout.`;
 }
 function setupStart(){
   const T=S.mode==="tournament", D=S.mode==="duo", n=S.players.length;
@@ -258,7 +271,7 @@ function renderTours(){
 }
 // How many matches a tournament has: per round, in total, and per table (each match is 2 or 3 games)
 function matchPlan(t){
-  const tour=Toads.buildTour(Array.from({length:t.players},(_,i)=>"p"+i),t.tables,t.format==="byes"?"byes":"quali",()=>0);
+  const tour=Toads.buildTour(Array.from({length:t.players},(_,i)=>"p"+i),t.tables,t.format==="byes"?"byes":"quali",()=>0,t.per||2);
   const rounds=[...(tour.quali?[["Qualifying",tour.quali.matches.length]]:[]),...tour.rounds.map((r,ri)=>[Toads.roundName(tour,ri),r.filter(m=>!m.bye).length])];
   const total=rounds.reduce((a,r)=>a+r[1],0), per=total/t.tables;
   return `<div class="plan"><span>${rounds.map(([n,k])=>`${esc(n)} <b>${k}</b>`).join(" · ")}</span>
@@ -511,7 +524,7 @@ async function createLive(){
   const name=$("liveName").value.replace(/\s+/g," ").trim(), pin=$("livePin").value.trim();
   if(!name||!/^\d{4,8}$/.test(pin)){NET.liveMsg=!name?"Give the tournament a name.":"The scoring PIN must be 4 to 8 digits.";render();return}
   NET.liveMsg="Creating the tournament…";render();
-  const r=await ToadsApi.tour("POST","",{name,venue:S.venue||null,players:S.players.slice(),tables:S.tables,format:S.tourFormat,pin},"required");
+  const r=await ToadsApi.tour("POST","",{name,venue:S.venue||null,players:S.players.slice(),tables:S.tables,format:S.tourFormat,per:qualiPer(S.players.length),pin},"required");
   if(r.status===201&&r.data){
     S.live={id:r.data.tournament.id,mine:{},queue:[],pin};liveTake(r.data.tournament);
     NET.liveMsg="";NET.liveNote="Share the link or QR code so others can follow. Tap a table to score it.";NET.shareOpen=true;
@@ -913,7 +926,7 @@ function columns(final,winner){
 /* ---------- actions ---------- */
 function goHub(){S.last=null;S.focus=null;S.ord=null;S.stage="bracket";render()}
 function startTournament(){
-  S.tour=buildTour(S.players.slice(),S.tables,S.tourFormat);settle();goHub();
+  S.tour=buildTour(S.players.slice(),S.tables,S.tourFormat,undefined,qualiPer(S.players.length));settle();goHub();
 }
 // Before every game: one toad each, closest to the hole throws first
 function askOrder(players){
@@ -1038,6 +1051,7 @@ $("modeSingle").addEventListener("click",()=>{S.mode="single";render()});
 $("modeTour").addEventListener("click",()=>{S.mode="tournament";render();if(NET.on)loadLiveList()});
 $("fmtQuali").addEventListener("click",()=>{S.tourFormat="quali";render()});
 $("fmtByes").addEventListener("click",()=>{S.tourFormat="byes";render()});
+$("perSel").addEventListener("change",()=>{S.qualiPer=+$("perSel").value;save();render()});
 $("modeDuo").addEventListener("click",()=>{S.mode="duo";if(!S.teams.length&&S.players.length>=2)addTeam();else render()});
 $("addTeamBtn").addEventListener("click",addTeam);
 $("teamList").addEventListener("input",e=>{const t=e.target.closest("input.tname");if(t){S.teams[+t.dataset.t].name=t.value;save();setupStart()}});

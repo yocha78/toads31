@@ -183,6 +183,22 @@ test("qualifying round: everyone plays 2 matches, top K are seeded into the knoc
   assert.deepEqual(t.rounds[0].map(m=>[m.a,m.b]),[[st[0].name,st[3].name],[st[1].name,st[2].name]]);
 });
 
+test("qualifying: the organiser picks how many matches each player plays",()=>{
+  assert.deepEqual(T.qualiPers(7),[2,4,6]);
+  assert.deepEqual(T.qualiPers(6),[1,2,3,4,5]);
+  assert.deepEqual(T.qualiPers(26),[1,2,3,4,5,6]);
+  for(const [n,per] of [[7,4],[7,6],[6,1],[6,3],[6,5],[26,3],[26,6],[12,4]]){
+    const t=T.buildTour(names(n),4,"quali",undefined,per), q=t.quali;
+    assert.equal(q.per,per);
+    assert.equal(q.matches.length,n*per/2,`${n} players, ${per} each`);
+    const opp={};for(const m of q.matches){(opp[m.a]??=[]).push(m.b);(opp[m.b]??=[]).push(m.a)}
+    for(const p of names(n)){assert.equal(opp[p].length,per,`${p} with ${n}/${per}`);assert.equal(new Set(opp[p]).size,per,"never the same opponent twice");assert.ok(!opp[p].includes(p))}
+  }
+  // an odd number with an odd count of players can't work: back to 2
+  assert.equal(T.buildTour(names(7),2,"quali",undefined,3).quali.matches.length,7);
+  assert.equal(T.buildTour(names(7),2,"quali").quali.per,2);
+});
+
 test("match is first to 2 games and winners move on",()=>{
   const t=T.buildTour(names(4),2,"knockout");
   T.settle(t);

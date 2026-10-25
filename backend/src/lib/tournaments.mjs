@@ -44,7 +44,11 @@ export async function createTournament(db, table, input, now = new Date()) {
   if (!Number.isInteger(b.tables) || b.tables < 1 || b.tables > MAX_TABLES) return { status: "invalid", error: `tables must be 1 to ${MAX_TABLES}` };
   if (typeof b.pin !== "string" || !/^\d{4,8}$/.test(b.pin)) return { status: "invalid", error: "the PIN must be 4 to 8 digits" };
 
-  const tour = Toads.buildTour(players, b.tables, b.format === "byes" ? "byes" : "quali");
+  // Qualifying matches per player (2 unless chosen); only used when there is a qualifying round
+  const per = b.per === undefined ? 2 : b.per;
+  if (!Toads.qualiPers(players.length).concat(2).includes(per))
+    return { status: "invalid", error: "per must be a number of qualifying matches that works for these players" };
+  const tour = Toads.buildTour(players, b.tables, b.format === "byes" ? "byes" : "quali", undefined, per);
   Toads.settle(tour); Toads.assignTables(tour);
   const salt = randomBytes(8).toString("hex"), created = now.toISOString();
   for (let tries = 0; tries < 5; tries++) {
@@ -100,7 +104,7 @@ export async function listAllTournaments(db, table) {
     const t = JSON.parse(item.state);
     return {
       id: item.id, name: item.name, venue: item.venue || null, created: item.created, status: item.status,
-      players: t.n, tables: t.tables - (t.off || []).length, champion: t.champion || null, format: t.format,
+      players: t.n, tables: t.tables - (t.off || []).length, champion: t.champion || null, format: t.format, per: t.quali ? t.quali.per || 2 : null,
       played: Toads.allMatches(t).filter(({ m }) => m.winner && !m.bye).length,
     };
   });
@@ -314,7 +318,7 @@ export async function editTournament(db, table, id, input) {
 export async function restartTournament(db, table, id, input) {
   const keepGames = !!(input || {}).keepGames;
   const r = await mutate(db, table, id, (item, tour) => {
-    const fresh = Toads.buildTour(drawOrder(item, tour), tour.tables, tour.format === "byes" ? "byes" : "quali");
+    const fresh = Toads.buildTour(drawOrder(item, tour), tour.tables, tour.format === "byes" ? "byes" : "quali", undefined, tour.quali ? tour.quali.per || 2 : 2);
     if (tour.names) fresh.names = tour.names;
     if (tour.off) fresh.off = tour.off.filter(k => k < fresh.tables);
     Toads.settle(fresh); Toads.assignTables(fresh);

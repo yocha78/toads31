@@ -2,17 +2,17 @@
 :root{
   --bg:#eceeef; --surface:#ffffff; --lead:#5b6268; --ink:#1f2326; --muted:#6a7177;
   --brass:#b8862b; --brass-ink:#2a1d05; --line:#d5d9dc; --good:#2f7d4f; --bad:#b33a2e;
-  --wood:#7a4a24; --wood-dark:#4a2c16; --leadtop:#a9afb4; --leadedge:#6f767b; --hole:#141617;
+  --wood:#7a4a24; --wood-dark:#4a2c16; --scored:#5a3519; --leadtop:#a9afb4; --leadedge:#6f767b; --hole:#141617;
   --slate:#1f2a26; --chalk:#ecece4; --chalk-dim:rgba(236,236,228,.55); --chalk-yellow:#f2d36b; --chalk-red:#f08a7e;
   --chalk-font:"Patrick Hand","Comic Sans MS",cursive; --chalk-display:"Cabin Sketch","Patrick Hand",cursive;
   --display:"Alfa Slab One",Georgia,serif; --body:"Atkinson Hyperlegible",system-ui,sans-serif;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --bg:#16191b; --surface:#22272a; --lead:#9aa3a9; --ink:#eef0f1; --muted:#9aa1a6;
-  --brass:#d9a845; --brass-ink:#1c1303; --line:#343b3f; --good:#5cc28a; --bad:#ef7a6c; color-scheme:dark}}
+  --brass:#d9a845; --brass-ink:#1c1303; --line:#343b3f; --good:#5cc28a; --bad:#ef7a6c; --scored:#c9915f; color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#16191b; --surface:#22272a; --lead:#9aa3a9; --ink:#eef0f1; --muted:#9aa1a6;
-  --brass:#d9a845; --brass-ink:#1c1303; --line:#343b3f; --good:#5cc28a; --bad:#ef7a6c; color-scheme:dark}
+  --brass:#d9a845; --brass-ink:#1c1303; --line:#343b3f; --good:#5cc28a; --bad:#ef7a6c; --scored:#c9915f; color-scheme:dark}
 [hidden]{display:none!important}
 body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.45}
 .wrap{max-width:520px;margin:0 auto;padding-inline:16px;padding-block:20px 40px;display:flex;flex-direction:column;gap:18px}
@@ -102,6 +102,8 @@ ul.players li:last-child{border-bottom:0}
 .pad button.over{filter:grayscale(1);opacity:.45}
 .msg{min-height:1.4em;text-align:center;font-weight:700;margin:0}
 .msg.bad{color:var(--bad)} .msg.good{color:var(--good)}
+/* "Al scores 8." under the score pad: wood brown, like the frame round the scoreboard */
+#msg.good{color:var(--scored)}
 .log{list-style:none;margin:0;padding:0;font-size:.92rem;color:var(--muted);display:flex;flex-direction:column;gap:2px;max-height:180px;overflow:auto}
 .log b{color:var(--ink)}
 .win{text-align:center;padding:18px 16px}

@@ -404,3 +404,6 @@ body.tvmode{background:#141a18;color:var(--chalk);overflow:hidden}
   .qsplit{grid-template-columns:1fr}
 }
 .menext .toad{width:18px;height:15px;fill:var(--brass);vertical-align:-2px}
+.qtab .wd{font-size:.75em;opacity:.7}
+.tedit .row{display:flex;gap:6px;align-items:center}
+.tedit .row select{flex:1;min-width:0}

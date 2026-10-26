@@ -238,7 +238,8 @@ const putList = (db, table, item) =>
 
 // Organiser: change the name, venue, PIN or number of tables, correct a player's name, name the tables,
 // or take one table out (only while no game has started on its match) and put it back.
-// input {name?, venue?, pin?, tables?, rename?: {from, to}, tableNames?: {n: name}, removeTable?: n, restoreTable?: n}
+// input {name?, venue?, pin?, tables?, rename?: {from, to}, tableNames?: {n: name}, removeTable?: n, restoreTable?: n,
+//        withdraw?: name, setResult?: {ri, mi, winner, wa, wb}}
 export async function editTournament(db, table, id, input) {
   const b = input || {};
   const name = b.name === undefined ? undefined : cleanName(b.name, 40);
@@ -300,6 +301,16 @@ export async function editTournament(db, table, id, input) {
       if (!(tour.off || []).includes(k)) return { reply: { status: 404, body: { error: "that table wasn't taken out" } } };
       tour.off = tour.off.filter(x => x !== k);
       Toads.assignTables(tour);
+    }
+    // A player leaves early: their matches to come are walkovers
+    if (b.withdraw !== undefined) {
+      const r = Toads.withdraw(tour, String(b.withdraw));
+      if (r.error) return { reply: { status: /isn't/.test(r.error) ? 404 : 409, body: { error: r.error } } };
+    }
+    // Set or correct a match result {ri, mi, winner, wa, wb}
+    if (b.setResult !== undefined) {
+      const r = Toads.setResult(tour, b.setResult || {});
+      if (r.error) return { reply: { status: r.conflict ? 409 : 400, body: { error: r.error } } };
     }
     if (tableNames) {
       tour.names = { ...(tour.names || {}) };

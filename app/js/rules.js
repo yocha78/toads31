@@ -124,9 +124,11 @@ function standings(tour){
     A.pl++;B.pl++;A.gw+=m.wa;A.gl+=m.wb;B.gw+=m.wb;B.gl+=m.wa;
     row[m.winner].w++;
   }
-  const avg=r=>r.toads?r.pts/r.toads:0;
+  const avg=r=>r.toads?r.pts/r.toads:0, out=new Set(tour.out||[]);
+  for(const r of Object.values(row))r.out=out.has(r.name);
   const h2h=(x,y)=>{const m=q.matches.find(m=>m.winner&&((m.a===x.name&&m.b===y.name)||(m.a===y.name&&m.b===x.name)));return m?(m.winner===x.name?-1:1):0};
-  return Object.values(row).sort((x,y)=>y.w-x.w||(y.gw-y.gl)-(x.gw-x.gl)||avg(y)-avg(x)||h2h(x,y)||x.idx-y.idx)
+  // A player who withdrew drops to the bottom and can't go through
+  return Object.values(row).sort((x,y)=>x.out-y.out||y.w-x.w||(y.gw-y.gl)-(x.gw-x.gl)||avg(y)-avg(x)||h2h(x,y)||x.idx-y.idx)
     .map(r=>({...r,avg:avg(r)}));
 }
 const qualiDone=tour=>{const q=tour.quali;return !q||q.matches.every(m=>m.winner)};
@@ -134,15 +136,57 @@ const qualiDone=tour=>{const q=tour.quali;return !q||q.matches.every(m=>m.winner
 // Fill the knockout with qualifiers (once qualifying is complete) and with winners as they come in
 function settle(tour){
   const R=tour.rounds, q=tour.quali;
+  if(q)walkovers(tour,q.matches);
   if(q){
     const done=qualiDone(tour), st=done?standings(tour):null, seeds=seedOrder(q.K);
     R[0].forEach((m,j)=>{m.a=done?st[seeds[2*j]-1].name:null;m.b=done?st[seeds[2*j+1]-1].name:null});
   }
-  for(let r=1;r<R.length;r++)R[r].forEach((m,j)=>{
-    m.a=R[r-1][2*j].winner||null;
-    if(m.bye){m.b=null;m.winner=m.a}else m.b=R[r-1][2*j+1].winner||null;
-  });
+  walkovers(tour,R[0]);
+  for(let r=1;r<R.length;r++){
+    R[r].forEach((m,j)=>{
+      m.a=R[r-1][2*j].winner||null;
+      if(m.bye){m.b=null;m.winner=m.a}else m.b=R[r-1][2*j+1].winner||null;
+    });
+    walkovers(tour,R[r]);
+  }
   tour.champion=R[R.length-1][0].winner||null;
+}
+// A player who withdrew (tour.out) gives their opponent the match as a walkover (wo), once both are known
+function walkovers(tour,ms){
+  const out=tour.out||[];if(!out.length)return;
+  for(const m of ms){
+    if(m.bye||!m.a||!m.b)continue;
+    const oa=out.includes(m.a), ob=out.includes(m.b);
+    if(m.wo&&!oa&&!ob){m.wo=false;m.winner=null}
+    if(m.winner||!(oa||ob))continue;
+    m.game=null;m.winner=oa&&!ob?m.b:m.a;m.wo=true;
+  }
+}
+// Organiser: a player leaves early. Their matches still to play become walkovers; a game of theirs in
+// progress is dropped. → {ok} | {error}
+function withdraw(tour,name){
+  const names=tour.quali?tour.quali.draw:tour.rounds[0].flatMap(m=>[m.a,m.b]).filter(Boolean);
+  if(!names.includes(name))return {error:`${name} isn't in this tournament`};
+  if((tour.out||[]).includes(name))return {error:`${name} has already withdrawn`};
+  tour.out=[...(tour.out||[]),name];
+  settle(tour);freeTables(tour);assignTables(tour);
+  return {ok:true};
+}
+// Organiser: set or correct a match result {ri, mi, winner, wa, wb} when scoring went wrong.
+// Not while a game is being played on it, nor once a game has started on the back of its result.
+function setResult(tour,r){
+  const m=matchOf(tour,r&&r.ri,r&&r.mi);
+  if(!m||m.bye)return {error:"no such match"};
+  if(!m.a||!m.b)return {error:"this match's players aren't known yet"};
+  if(r.winner!==m.a&&r.winner!==m.b)return {error:"the winner must be one of the match's players"};
+  const lo=r.winner===m.a?r.wb:r.wa, hi=r.winner===m.a?r.wa:r.wb;
+  if(hi!==TO_WIN||!Number.isInteger(lo)||lo<0||lo>=TO_WIN)return {error:`the winner has ${TO_WIN} games and the loser fewer`};
+  if(m.game&&!m.game.done)return {error:"a game is being played on this match: finish it first",conflict:true};
+  const after=allMatches(tour).filter(x=>x.m!==m&&x.m.game&&feedsFrom(tour,x,r.ri,r.mi,{winner:true}));
+  if(after.length)return {error:"a game has already started on the back of this result",conflict:true};
+  m.winner=r.winner;m.wa=r.wa;m.wb=r.wb;m.wo=false;m.fixed=true;
+  settle(tour);freeTables(tour);assignTables(tour);
+  return {ok:true};
 }
 // ri -1 = qualifying round, 0.. = knockout rounds
 const allMatches=tour=>[...(tour.quali?tour.quali.matches.map((m,mi)=>({m,ri:-1,mi})):[]),...tour.rounds.flatMap((r,ri)=>r.map((m,mi)=>({m,ri,mi})))];
@@ -254,6 +298,6 @@ function gameRecord(g,info){
 }
 
 const Toads={TARGET,TO_WIN,coinsFor,keypad,finishChoices,newG,throwerOf,playTurn,undoTurn,sideStats,playerStats,
-  mk,knockSize,seedOrder,qualiPers,buildTour,standings,qualiDone,settle,allMatches,ready,assignTables,roundName,tableOn,tableName,gameNo,recordGameWin,undoGameWin,matchOf,applyOp,gameRecord};
+  mk,knockSize,seedOrder,qualiPers,buildTour,standings,qualiDone,settle,withdraw,setResult,allMatches,ready,assignTables,roundName,tableOn,tableName,gameNo,recordGameWin,undoGameWin,matchOf,applyOp,gameRecord};
 if(typeof module!=="undefined"&&module.exports)module.exports=Toads;else root.Toads=Toads;
 })(this);

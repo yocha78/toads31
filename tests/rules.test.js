@@ -246,3 +246,45 @@ test("round names",()=>{
   const t=T.buildTour(names(16),1,"knockout");
   assert.deepEqual([0,1,2,3,-1].map(ri=>T.roundName(t,ri)),["Round 1","Quarter-finals","Semi-finals","Final","Qualifying"]);
 });
+
+test("a player who withdraws gives walkovers, drops to the bottom of qualifying, and never goes through",()=>{
+  const t=T.buildTour(names(6),2,"quali");T.settle(t);T.assignTables(t);
+  // P1 v P2 has a game going; P1 leaves
+  const m0=T.matchOf(t,-1,0);m0.game={done:false};
+  assert.ok(T.withdraw(t,"P1").ok);
+  assert.match(T.withdraw(t,"P1").error,/already/);
+  assert.match(T.withdraw(t,"Zed").error,/isn't/);
+  const p1=t.quali.matches.filter(m=>m.a==="P1"||m.b==="P1");
+  assert.equal(p1.length,2);
+  for(const m of p1){assert.ok(m.wo);assert.notEqual(m.winner,"P1");assert.equal(m.game,null)}
+  // finish the rest: the first player of each match wins
+  for(const m of t.quali.matches)if(!m.winner)winMatch(t,m,m.a);
+  const st=T.standings(t);
+  assert.equal(st.at(-1).name,"P1");
+  assert.ok(!t.rounds[0].some(m=>m.a==="P1"||m.b==="P1"));
+});
+
+test("a knockout walkover moves the other player on",()=>{
+  const t=T.buildTour(names(4),2,"knockout");T.settle(t);
+  T.withdraw(t,"P2");
+  assert.equal(t.rounds[0][0].winner,"P1");
+  winMatch(t,t.rounds[0][1],"P4");
+  assert.equal(t.rounds[1][0].a,"P1");assert.equal(t.rounds[1][0].b,"P4");
+  T.withdraw(t,"P4");
+  assert.equal(t.champion,"P1");
+});
+
+test("the organiser sets or corrects a result until a game is played on the back of it",()=>{
+  const t=T.buildTour(names(4),2,"knockout");T.settle(t);T.assignTables(t);
+  const m=t.rounds[0][0];
+  assert.match(T.setResult(t,{ri:0,mi:0,winner:"P1",wa:3,wb:0}).error,/games/);
+  assert.match(T.setResult(t,{ri:0,mi:0,winner:"P9",wa:2,wb:0}).error,/winner/);
+  assert.ok(T.setResult(t,{ri:0,mi:0,winner:"P1",wa:2,wb:1}).ok);
+  assert.equal(t.rounds[1][0].a,"P1");
+  assert.ok(T.setResult(t,{ri:0,mi:0,winner:"P2",wa:0,wb:2}).ok,"corrected");
+  assert.equal(t.rounds[1][0].a,"P2");assert.equal(m.wb,2);
+  winMatch(t,t.rounds[0][1],"P3");T.assignTables(t);
+  t.rounds[1][0].game={done:false};
+  assert.match(T.setResult(t,{ri:0,mi:0,winner:"P1",wa:2,wb:0}).error,/back of this result/);
+  assert.match(T.setResult(t,{ri:1,mi:0,winner:"P2",wa:2,wb:0}).error,/being played/);
+});

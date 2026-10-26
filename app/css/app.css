@@ -100,6 +100,47 @@ ul.players li:last-child{border-bottom:0}
 .pad button:active{transform:scale(.9) rotate(-4deg)}
 .pad button:focus-visible{outline:2px solid var(--brass,#b8892f);outline-offset:2px;border-radius:10px}
 .pad button.over{filter:grayscale(1);opacity:.45}
+/* The score that finishes the game: a brass toad, with a gentle pulse */
+.pad button.fin{background-image:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 14'><g fill='%23d9a845'><circle cx='4.5' cy='3.5' r='2.6'/><circle cx='11.5' cy='3.5' r='2.6'/><ellipse cx='8' cy='9' rx='7' ry='4.6'/></g><circle cx='4.5' cy='3.2' r='1' fill='%231f2a26'/><circle cx='11.5' cy='3.2' r='1' fill='%231f2a26'/></svg>");color:#1c1303}
+@media (prefers-reduced-motion:no-preference){.pad button.fin{animation:finpulse 1.6s ease-in-out infinite}}
+@keyframes finpulse{50%{transform:scale(1.08)}}
+.need .canfin{color:var(--scored);font-weight:700}
+.gamesync{margin:0;text-align:center} .gamesync.bad{color:var(--bad)}
+/* Win: toads hop up behind the winner's name */
+.win{position:relative;overflow:hidden}
+.hops{position:absolute;left:0;right:0;top:0;height:200px;pointer-events:none}
+.hops .toad{position:absolute;bottom:-40px;width:26px;height:22px;fill:var(--chalk-yellow);opacity:0}
+@media (prefers-reduced-motion:no-preference){
+  .hops .toad{animation:hop 1.5s ease-out forwards}
+  .win .trophy{animation:bounce .7s ease-out 2}
+}
+@keyframes hop{0%{opacity:0;transform:translateY(0)}15%{opacity:1}55%{transform:translateY(-180px) rotate(-12deg)}100%{opacity:0;transform:translateY(-60px) rotate(8deg)}}
+@keyframes bounce{40%{transform:translateY(-10px) scale(1.1)}}
+.howto{border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.howto summary{cursor:pointer}
+.howto ul{margin:8px 0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
+.soundsw{padding:4px 2px}
+/* My matches: a player following a tournament picks their name */
+.mebox{display:flex;flex-direction:column;gap:6px;font-size:.88rem;color:var(--muted)}
+.menext{margin:0;padding:10px 12px;border-radius:10px;background:var(--bg);color:var(--ink);font-size:1rem;border-left:4px solid var(--brass)}
+.menext.now{background:var(--brass);color:var(--brass-ink);border-left-color:var(--wood-dark);font-weight:700}
+.tcard.me{border:2px solid var(--brass)}
+.bm .bp.me span:first-child,.qtab tr.me .nm{text-decoration:underline;text-decoration-color:var(--chalk-yellow);text-underline-offset:3px}
+/* Setup: the matches the draw makes, before starting */
+.drawprev{border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.drawprev summary{cursor:pointer}
+.drawprev ol{margin:8px 0 0;padding-left:22px;columns:2;column-gap:18px;font-size:.92rem}
+.drawprev li{break-inside:avoid;padding:1px 0}
+.drawprev h4{margin:10px 0 2px;font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+/* TV: a new match on a table is called out in big letters for a few seconds */
+.tvcall{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:5;background:var(--slate);border:.35em solid var(--wood);border-radius:.6em;box-shadow:0 1em 3em rgba(0,0,0,.6);padding:1em 2em;text-align:center;font-size:2.4em;max-width:90vw}
+.tvcall p{margin:.15em 0}
+.tvcall b{font-family:var(--chalk-display);color:var(--chalk-yellow)}
+.tvcall span{display:block;font-size:.55em;color:var(--chalk-dim)}
+@media (prefers-reduced-motion:no-preference){.tvcall{animation:callin .4s ease-out}}
+@keyframes callin{from{transform:translate(-50%,-50%) scale(.7);opacity:0}}
+/* Qualifying: the column that separated two players on the same number of wins */
+.qtab td.dec{text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:3px;font-weight:700}
 .msg{min-height:1.4em;text-align:center;font-weight:700;margin:0}
 .msg.bad{color:var(--bad)} .msg.good{color:var(--good)}
 /* "Al scores 8." under the score pad: wood brown, like the frame round the scoreboard */
@@ -359,3 +400,7 @@ body.tvmode{background:#141a18;color:var(--chalk);overflow:hidden}
   .tvboard .bracket{grid-auto-columns:minmax(110px,1fr);overflow-x:auto}
   .qsplit{grid-template-columns:1fr}
 }
+.menext .toad{width:18px;height:15px;fill:var(--brass);vertical-align:-2px}
+.qtab .wd{font-size:.75em;opacity:.7}
+.tedit .row{display:flex;gap:6px;align-items:center}
+.tedit .row select{flex:1;min-width:0}

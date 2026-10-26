@@ -199,3 +199,22 @@ test("qualifying matches per player: chosen at the start, checked, and kept by a
   assert.equal((await call(h, "POST /tournaments/{id}/restart", { id: t.id, token: org, body: {} })).status, 200);
   assert.equal((await tour()).quali.per, 4);
 });
+
+test("a player withdraws and a result is corrected, by the organiser only", async () => {
+  const { h } = setup(), org = await orgToken(h);
+  const t = (await create(h, { players: ["Al", "Bo", "Cy", "Di"] })).body.tournament;
+  const edit = (body, token = org) => call(h, "PATCH /tournaments/{id}", { id: t.id, token, body });
+  const tour = async () => (await call(h, "GET /tournaments/{id}", { id: t.id })).body.tournament.tour;
+  assert.equal((await edit({ withdraw: "Bo" }, null)).status, 401);
+  assert.equal((await edit({ withdraw: "Zed" })).status, 404);
+  assert.equal((await edit({ withdraw: "Bo" })).status, 200);
+  assert.equal((await edit({ withdraw: "Bo" })).status, 409);
+  let v = await tour();
+  assert.deepEqual(v.out, ["Bo"]);
+  assert.equal(T.matchOf(v, 0, 0).winner, "Al");
+  assert.equal((await edit({ setResult: { ri: 0, mi: 1, winner: "Cy", wa: 2, wb: 1 } })).status, 200);
+  v = await tour();
+  assert.deepEqual([v.rounds[1][0].a, v.rounds[1][0].b], ["Al", "Cy"]);
+  assert.equal((await edit({ setResult: { ri: 0, mi: 1, winner: "Cy", wa: 5, wb: 1 } })).status, 400);
+  assert.equal((await edit({ setResult: { ri: 4, mi: 0, winner: "Cy", wa: 2, wb: 0 } })).status, 400);
+});

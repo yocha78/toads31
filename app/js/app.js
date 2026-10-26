@@ -52,6 +52,7 @@ function render(){
   const v=views[S.stage];
   if(!v){S.stage="setup";return render()}
   $(v[0]).hidden=false;v[1]();
+  gameAwake();
   save();
   if(NET.on)syncGames();
 }
@@ -80,6 +81,7 @@ function renderSetup(){
   $("noPlayers").hidden=n>0;
   $("noPlayers").textContent=T?"Add at least two players.":D?"Add players, then put them into teams of two below.":"Add one or more players.";
   $("shuffleBtn").hidden=!(T&&n>2);
+  renderDrawPreview(T,n);
   if(NET.on)renderOnline();
   if(NET.on)renderLiveSetup();
   setupStart();
@@ -108,6 +110,21 @@ function renderPer(on){
   $("perSel").innerHTML=Toads.qualiPers(n).map(m=>`<option value="${m}"${m===per?" selected":""}>${m} (${perTable(tourMatches(n,m).total,tables)} per table)</option>`).join("");
   const c=tourMatches(n,per);
   $("perHint").textContent=`${c.quali} qualifying matches, ${c.total} in all with the knockout, on ${tables} table${tables===1?"":"s"}.`+(n%2?" Odd numbers need an even number of players.":"");
+}
+// The matches the draw makes with the list as it stands, so the organiser can shuffle before starting
+function renderDrawPreview(T,n){
+  $("drawPrev").hidden=!(T&&n>=3);if($("drawPrev").hidden)return;
+  const K=knockSize(n);
+  if(K<n&&S.tourFormat==="byes"){$("drawPrevSum").textContent="byes are drawn at random when you start";$("drawPrevBody").innerHTML="";return}
+  const t=buildTour(S.players.slice(),S.tables,S.tourFormat,()=>0,qualiPer(n)), vs=m=>`<li>${esc(m.a)} v ${esc(m.b)}</li>`;
+  if(t.quali){
+    $("drawPrevSum").textContent=`${t.quali.matches.length} qualifying matches`;
+    $("drawPrevBody").innerHTML=`<ol>${t.quali.matches.map(vs).join("")}</ol>`;
+  }else{
+    const r0=t.rounds[0];
+    $("drawPrevSum").textContent=`${Toads.roundName(t,0)}: ${r0.length} match${r0.length===1?"":"es"}`;
+    $("drawPrevBody").innerHTML=`<ol>${r0.map(m=>m.bye?`<li>${esc(m.a)}: bye</li>`:vs(m)).join("")}</ol>`;
+  }
 }
 function tourHint(n){
   const base="Knockout, one against one. First to win 2 games takes the match, and winners meet in the next round.";
@@ -207,6 +224,7 @@ function renderMenu(){
   if(org)$("venueAdmin").innerHTML=NET.venues.slice().sort(byName).map(v=>`<li data-venue="${esc(v.id)}">
     <input type="text" value="${esc(v.name)}" maxlength="60" aria-label="Venue name"><button class="x" data-vsave>Save</button><button class="x" data-vdel>${NET.armed==="venue:"+v.id?"Tap again to delete":"Delete"}</button></li>`).join("")||`<li class="hint">No venues yet.</li>`;
   $("wipeYes").disabled=$("wipeInput").value.trim()!=="DELETE";
+  $("soundOn").checked=soundOn();
 }
 function openMenu(){
   if(!["menu","players","stats","tours"].includes(S.stage))S.menuFrom=S.stage;
@@ -249,6 +267,8 @@ function renderTours(){
         <label>Venue<select name="venue">${venueOptions(d.venue)}</select></label>
         <div class="tedit"><span>Tables</span>${tableRows(d.tour)}
           ${d.tour.tables<maxT?`<button type="button" class="link" data-tbl="add">Add a table</button>`:""}</div>
+        ${leaveRows(d.tour)}
+        ${fixRows(d.tour)}
         <label>New scoring PIN<input type="text" name="pin" inputmode="numeric" pattern="[0-9]*" maxlength="8" placeholder="Leave empty to keep it" autocomplete="off"></label>
         <label>Correct a player's name<span class="row"><select name="from"><option value="">Player…</option>${names.map(n=>`<option>${esc(n)}</option>`).join("")}</select><input type="text" name="to" maxlength="24" placeholder="New name" autocomplete="off"></span></label>
         <div class="actions"><button type="button" data-cancel>Cancel</button><button class="primary" type="submit">Save</button></div></form>`
@@ -336,6 +356,14 @@ async function openTV(id){
 function closeTV(){TV=null;clearInterval(tvTimer);tvTimer=null;try{wake&&wake.release()}catch(e){}wake=null;render()}
 // Ask the screen not to go to sleep (where the browser allows it)
 async function keepAwake(){try{if(TV&&navigator.wakeLock&&document.visibilityState==="visible")wake=await navigator.wakeLock.request("screen")}catch(e){}}
+// The scoring phone stays on during a game (screens otherwise dim and lock between turns)
+async function gameAwake(){
+  const want=!TV&&["game","order"].includes(S.stage)&&document.visibilityState==="visible";
+  try{
+    if(want&&!wake&&navigator.wakeLock){wake=await navigator.wakeLock.request("screen");wake.addEventListener("release",()=>{wake=null})}
+    else if(!want&&!TV&&wake){const w=wake;wake=null;await w.release()}
+  }catch(e){}
+}
 async function tvFetch(full){
   const T=TV;if(!T)return;
   const r=await ToadsApi.tour("GET",`/${T.id}`+(full||!T.tour?"":`?since=${T.ver}`));
@@ -360,6 +388,7 @@ function renderTV(){
   if(!t)return;
   Toads.settle(t);
   const list=all(), on=list.filter(({m})=>m.table!=null&&!m.winner).sort((x,y)=>x.m.table-y.m.table);
+  tvCallOut(on);
   $("tvNow").innerHTML=on.map(({m,ri})=>{
     const g=m.game&&!m.game.done?m.game:null, k=m.table, claimed=T.claims&&T.claims[k];
     const side=(name,w)=>{const i=g?g.gp.indexOf(name):-1;return `<div class="tvp${g&&g.cur===i?" up":""}"><span>${esc(name)}</span><i>${w}</i><b>${g?ringIf(g.rem[i]):""}</b></div>`};
@@ -380,6 +409,16 @@ function renderTV(){
   $("tvQuali").innerHTML=quali?qualiHTML(true):"";
   $("tvBracket").innerHTML=quali?`<p class="tvlater">${done?`Qualifying is complete: the top ${t.quali.K} play the knockout,`:`Then the top ${t.quali.K} play a knockout:`} ${t.rounds.map((_,ri)=>roundName(ri).toLowerCase()).join(", ")}.</p>`:bracketHTML();
   fitTV();
+}
+// When a table gets a new match, call it out for 12 seconds ("Al v Bo → Garden"). Not on the first look.
+function tvCallOut(on){
+  const T=TV, now=Object.fromEntries(on.map(({m,ri})=>[m.table,`${ri}:${m.a}:${m.b}`]));
+  const fresh=T.tables?on.filter(({m})=>!m.game&&T.tables[m.table]!==now[m.table]):[];
+  T.tables=now;
+  if(!fresh.length)return;
+  $("tvCall").innerHTML=fresh.map(({m,ri})=>`<p><b>${esc(m.a)} v ${esc(m.b)}</b> → ${TN(m.table)}<span>${roundName(ri)}</span></p>`).join("");
+  $("tvCall").hidden=false;
+  clearTimeout(T.callTimer);T.callTimer=setTimeout(()=>{$("tvCall").hidden=true},12000);
 }
 // Everything stays on one screen: shrink the text of a side until it fits (no scrolling on a TV)
 function fitTV(){
@@ -469,6 +508,42 @@ function tableRows(tour){
       :active>1?`<button type="button" class="x" data-tbl="remove" data-k="${k}">Remove</button>`:"";
     return `<li${out?` class="out"`:""}><input type="text" name="tname${k}" value="${esc((tour.names||{})[k]||"")}" placeholder="Table ${k+1}" maxlength="20" aria-label="Name of table ${k+1}"${out?" disabled":""}>${act}</li>`;
   }).join("")}</ul>`;
+}
+// Edit form: a player who leaves early (their matches to come become walkovers)
+function leaveRows(t){
+  const out=t.out||[], left=drawNames(t).filter(n=>!out.includes(n)), armed=NET.wdArmed;
+  return `<div class="tedit"><span>A player leaves early</span>
+    <span class="row"><select data-wd><option value="">Player…</option>${left.map(n=>`<option${n===armed?" selected":""}>${esc(n)}</option>`).join("")}</select>
+    <button type="button" class="${armed?"primary":"x"}" data-wdgo>${armed?`Withdraw ${esc(armed)}?`:"Withdraw"}</button></span>
+    <span class="hint">${armed?"Their matches still to play are given to their opponents. This can't be undone.":out.length?`Withdrawn: ${out.map(esc).join(", ")}.`:"Their matches still to play are given to their opponents."}</span></div>`;
+}
+// Edit form: set or correct a match result (not once a game has started on the back of it)
+function fixRows(t){
+  const ms=Toads.allMatches(t).filter(({m})=>m.a&&m.b&&!m.bye&&!(m.game&&!m.game.done));
+  if(!ms.length)return "";
+  const sel=NET.fixSel&&ms.find(({ri,mi})=>`${ri}:${mi}`===NET.fixSel)||ms[0], m=sel.m;
+  const res=x=>x.wo?`${x.winner} by walkover`:x.winner?`${x.winner} won ${Math.max(x.wa,x.wb)}–${Math.min(x.wa,x.wb)}`:"not played";
+  return `<div class="tedit"><span>Set or correct a result</span>
+    <select data-fixm>${ms.map(({m:x,ri,mi})=>`<option value="${ri}:${mi}"${x===m?" selected":""}>${esc(Toads.roundName(t,ri))}: ${esc(x.a)} v ${esc(x.b)} · ${esc(res(x))}</option>`).join("")}</select>
+    <span class="row"><select data-fixw>${[m.a,m.b].map(n=>`<option${n===m.winner?" selected":""}>${esc(n)}</option>`).join("")}</select>
+    <select data-fixs><option value="0"${m.winner&&Math.min(m.wa,m.wb)===0?" selected":""}>won 2–0</option><option value="1"${m.winner&&Math.min(m.wa,m.wb)===1?" selected":""}>won 2–1</option></select>
+    <button type="button" class="x" data-fixgo>Save result</button></span></div>`;
+}
+async function leaveAction(id,name){
+  const r=await ToadsApi.tour("PATCH","/"+id,{withdraw:name},"required");
+  NET.wdArmed=null;
+  NET.toursMsg=r.status===200?`${name} has withdrawn. Their matches to come are walkovers.`:failMsg(r,"withdraw them");
+  if(r.status===200&&S.live&&S.live.id===id)liveFetch(true);
+  loadTours();await startEdit(id);
+}
+async function fixAction(id,form){
+  const [ri,mi]=form.querySelector("[data-fixm]").value.split(":").map(Number), w=form.querySelector("[data-fixw]").value, lo=+form.querySelector("[data-fixs]").value;
+  const m=Toads.matchOf(NET.tourAct.data.tour,ri,mi);if(!m)return;
+  const body={setResult:{ri,mi,winner:w,wa:w===m.a?2:lo,wb:w===m.b?2:lo}};
+  const r=await ToadsApi.tour("PATCH","/"+id,body,"required");
+  NET.toursMsg=r.status===200?`Result saved: ${w} won 2–${lo}.`:failMsg(r,"save the result");
+  if(r.status===200&&S.live&&S.live.id===id)liveFetch(true);
+  loadTours();await startEdit(id);
 }
 // Remove, put back or add a table straight away, then show the form again with the new state
 async function tableAction(id,kind,k){
@@ -589,6 +664,7 @@ function liveStatus(){
   $("liveSync").textContent=q?(L.offline?`Offline: ${q} change${q===1?"":"s"} waiting to send.`:"Sending…")
     :L.offline?`Offline: showing the scores from ${ago(Date.now()-(L.seen||0))}.`:L.seen?`Updated ${ago(Date.now()-L.seen)}.`:"";
   $("liveSync").className="hint"+(L.offline?" bad":"");
+  if(S.stage==="game")gameSync();
 }
 async function claimTable(k,takeover){
   const L=S.live;
@@ -647,7 +723,41 @@ function renderLivePanel(){
   $("pinForm").hidden=!p;
   if(p)$("pinLabel").textContent=`Enter the scoring PIN to ${p.takeover?"take over":"score"} ${tname(p.k)}.`;
   $("liveEnd").hidden=!(org&&L.status!=="ended");
+  renderMe();
   liveStatus();
+}
+// My matches: the player picks their name once per tournament (kept on this phone) and sees their next match
+const ME=()=>S.live&&S.live.me&&drawNames(TOUR()).includes(S.live.me)?S.live.me:null;
+function renderMe(){
+  const t=TOUR(), names=drawNames(t).slice().sort((a,b)=>a.localeCompare(b,"en-GB",{sensitivity:"base"})), me=ME();
+  $("meBox").hidden=!names.length;
+  if(document.activeElement!==$("meSel"))$("meSel").innerHTML=`<option value="">Not playing / just watching</option>`+names.map(n=>`<option${n===me?" selected":""}>${esc(n)}</option>`).join("");
+  const nx=me?myNext(t,me):null;
+  $("meNext").hidden=!nx;
+  if(!nx)return;
+  $("meNext").innerHTML=nx.html;$("meNext").className="menext"+(nx.now?" now":"");
+  // Tell the player once when their match gets a table
+  const key=nx.now?nx.key:null;
+  if(key&&S.live.meCalled!==key&&S.live.meCalled!==undefined){try{navigator.vibrate&&navigator.vibrate([200,100,200])}catch(e){}if(soundOn())croak()}
+  S.live.meCalled=key;
+}
+function myNext(t,me){
+  const list=all(), mine=list.filter(({m})=>!m.winner&&!m.bye&&(m.a===me||m.b===me));
+  const on=mine.find(({m})=>m.table!=null);
+  const vs=m=>esc(m.a===me?m.b:m.a);
+  if(on)return {now:true,key:`${on.ri}:${on.mi}`,html:`You're on <b>${TN(on.m.table)}</b> now: v ${vs(on.m)} (${roundName(on.ri)}${gameNo(on.m)>1?`, game ${gameNo(on.m)}`:""}).`};
+  const nextUp=mine.find(({m})=>m.a&&m.b);
+  if(nextUp){
+    const queue=list.filter(({m})=>ready(m)&&m.table==null), ahead=queue.findIndex(x=>x.m===nextUp.m);
+    return {html:`Next: v ${vs(nextUp.m)} (${roundName(nextUp.ri)}). Waiting for a table${ahead>0?`, ${ahead} match${ahead===1?"":"es"} before yours`:": you're next"}.`};
+  }
+  if(t.champion===me)return {html:`You're the champion! ${TOAD}`};
+  if((t.out||[]).includes(me))return {html:"You've withdrawn from this tournament."};
+  if(mine.length)return {html:"Waiting for your next opponent's match to finish."};
+  if(t.rounds.some(r=>r.some(m=>m.winner&&!m.bye&&(m.a===me||m.b===me)&&m.winner!==me)))return {html:"You're out. Thanks for playing!"};
+  if(t.quali&&!qualiDone())return {html:"Your qualifying matches are done. Waiting for the others to finish."};
+  if(t.quali&&!t.rounds.some(r=>r.some(m=>m.a===me||m.b===me)))return {html:"You didn't make the knockout this time. Thanks for playing!"};
+  return {html:"Waiting for your next match."};
 }
 // Live extras on a table card: who is scoring it, and the buttons that go with that
 function liveCard(k,x){
@@ -739,7 +849,7 @@ function renderHub(){
       continue;
     }
     const {m,ri,mi}=x, g=m.game&&!m.game.done?m.game:null;
-    cards+=`<div class="tcard"><div class="tn"><span>${TN(k)}</span><span class="pill${g?"":" idle"}">${g?"Playing":"Ready"}</span></div>
+    cards+=`<div class="tcard${ME()&&(m.a===ME()||m.b===ME())?" me":""}"><div class="tn"><span>${TN(k)}</span><span class="pill${g?"":" idle"}">${g?"Playing":"Ready"}</span></div>
       <div class="tw">${esc(m.a)} v ${esc(m.b)}</div>
       <div class="ti">${roundName(ri)} · Game ${gameNo(m)}${gameNo(m)>1?` · ${m.wa}–${m.wb}`:""}</div>
       ${g?`<div class="live">${g.gp.map((p,i)=>`${esc(p)} ${g.rem[i]}`).join(" · ")} left</div>`:""}
@@ -776,7 +886,9 @@ function renderHub(){
 function qualiHTML(tv){
   const q=TOUR().quali, st=standings(), done=qualiDone();
   const played=q.matches.filter(m=>m.winner).length;
-  const row=(r,i)=>`<tr class="${i<q.K?"in":""}${i===q.K-1?" cut":""}"><td>${i+1}</td><td class="nm">${esc(r.name)}</td><td>${r.pl}</td><td>${r.w}</td><td>${r.gw-r.gl>0?"+":""}${r.gw-r.gl}</td><td>${r.toads?r.avg.toFixed(2):"–"}</td></tr>`;
+  // Underline what put a player below the one above when they won as many matches
+  const dec=i=>{if(!i)return"";const a=st[i-1],b=st[i];if(a.w!==b.w||!b.pl)return"";return a.gw-a.gl!==b.gw-b.gl?"gd":a.avg!==b.avg?"avg":""};
+  const row=(r,i)=>{const d=dec(i);return `<tr class="${i<q.K?"in":""}${i===q.K-1?" cut":""}${!tv&&r.name===ME()?" me":""}"><td>${i+1}</td><td class="nm">${esc(r.name)}${r.out?` <span class="wd">withdrew</span>`:""}</td><td>${r.pl}</td><td>${r.w}</td><td${d==="gd"?' class="dec"':""}>${r.gw-r.gl>0?"+":""}${r.gw-r.gl}</td><td${d==="avg"?' class="dec"':""}>${r.toads?r.avg.toFixed(2):"–"}</td></tr>`};
   const rows=st.map(row).join(""), thead=`<thead><tr><th>#</th><th class="nm">Player</th><th title="Matches played">Pl</th><th title="Matches won">W</th><th title="Games won minus lost">+/−</th><th title="Average per toad">Avg</th></tr></thead>`;
   // The TV screen shows the table in two halves side by side
   if(tv){const h=Math.ceil(st.length/2);return `<div class="qhead"><h3>Qualifying</h3><span>${played} of ${q.matches.length} played · top ${q.K} go through</span></div>
@@ -786,7 +898,7 @@ function qualiHTML(tv){
   if(!open)return head;
   return `${head}
     <table class="qtab">${thead}<tbody>${rows}</tbody></table>
-    <p class="qnote">Ranked by matches won, then games +/−, then average per toad, then head-to-head.</p>`;
+    <p class="qnote">Ranked by matches won, then games +/−, then average per toad, then head-to-head. An underlined number is what separated two players on the same wins.</p>`;
 }
 
 function bracketHTML(){
@@ -797,7 +909,7 @@ function bracketHTML(){
       if(isB&&m.bye)return `<div class="bp tbd"><span>bye</span></div>`;
       if(!name)return `<div class="bp tbd"><span>?</span></div>`;
       const cls=m.winner?(m.winner===name?" w":" l"):"";
-      return `<div class="bp${cls}"><span>${esc(name)}</span>${m.bye?"":`<span class="s">${w}</span>`}</div>`;
+      return `<div class="bp${cls}${!TV&&name===ME()?" me":""}"><span>${esc(name)}</span>${m.bye?"":`<span class="s">${m.wo?(m.winner===name?"w/o":""):w}</span>`}</div>`;
     };
     return `<div class="bm${live?" now":""}">${live?`<span class="tb">${TN(m.table)}</span>`:""}${line(m.a,m.wa,false)}${line(m.b,m.wb,true)}</div>`;
   }).join("")+`</div></div>`).join("");
@@ -809,24 +921,60 @@ function renderGame(){
   const g=G(), r=g.rem[g.cur], m=M();
   $("turnName").textContent=throwerOf(g,g.cur);
   const c=coinsFor(g.hist.length,r);
-  $("turnNeed").textContent=`${g.members?g.gp[g.cur]+" · ":""}Needs ${r} · ${c} toad${c>1?"s":""} (max ${c*2}) · Round ${g.round}`;
+  const fin=r<=c*2;
+  $("turnNeed").innerHTML=esc(`${g.members?g.gp[g.cur]+" · ":""}Needs ${r} · ${c} toad${c>1?"s":""} (max ${c*2}) · Round ${g.round}`)+(fin?` · <span class="canfin">can finish now</span>`:"");
   $("matchInfo").hidden=!m;
   if(m)$("matchInfo").textContent=`${tname(m.table)} · ${roundName(S.focus.ri)} · Game ${gameNo(m)} · ${m.a} ${m.wa}–${m.wb} ${m.b}`;
   $("quitBtn").textContent=m?"Back to tables":"End game";
-  $("pad").innerHTML=Toads.keypad(c,r).map(({n,bust})=>`<button data-s="${n}" class="${bust?"over":""}" aria-label="Score ${n}${bust?' (bust)':''}">${n}</button>`).join("");
+  $("pad").innerHTML=Toads.keypad(c,r).map(({n,bust})=>`<button data-s="${n}" class="${bust?"over":n===r?"fin":""}" aria-label="Score ${n}${bust?' (bust)':n===r?' (finishes)':''}">${n}</button>`).join("");
   closeFinish();
-  $("undoBtn").disabled=g.hist.length===0;
+  // Undo names the turn it takes back
+  const last=g.hist[g.hist.length-1];
+  $("undoBtn").disabled=!last;
+  $("undoBtn").textContent=last?`Undo ${last.who}'s ${last.bust?"bust":last.s}`:"Undo last turn";
+  gameSync();
   // Watching a live table scored on another phone: the board only
   const watch=!scoring();
   $("pad").hidden=watch;$("undoBtn").hidden=watch;
   if(watch){$("msg").textContent=S.live.status==="ended"?"The tournament has ended.":"Watching: the scores come from the phone at the table.";$("msg").className="msg"}
   $("board").innerHTML=columns(false);
+  const bw=$("board").parentElement;bw.scrollTop=bw.scrollHeight;
+}
+// On the game screen of a live table: say when scores are waiting for a signal
+function gameSync(){
+  const L=S.live, el=$("gameSync");
+  const q=L&&scoring()?L.queue.length:0;
+  el.textContent=!L||!scoring()?"":q?(L.offline?`No signal: ${q} score${q===1?"":"s"} kept on this phone, sent when it's back.`:"Sending…"):L.offline?"No signal right now. Keep scoring: nothing is lost.":"";
+  el.className="hint gamesync"+(L&&L.offline?" bad":"");
+  el.hidden=!el.textContent;
 }
 
+// Toads hop up once per win (not on every redraw), with an optional croak
+let cheered=null;
+function celebrate(key){
+  if(cheered===key)return;cheered=key;
+  $("hops").innerHTML=Array.from({length:9},(_,i)=>TOAD.replace('class="toad"',`class="toad" style="left:${6+i*10.5}%;animation-delay:${(i%3)*.15+i*.04}s"`)).join("");
+  if(soundOn())croak();
+}
+const soundOn=()=>{try{return localStorage.getItem("toads31.sound")==="on"}catch(e){return false}};
+// A short two-note croak, made on the phone (no sound file)
+function croak(){
+  try{
+    const A=window.AudioContext||window.webkitAudioContext;if(!A)return;
+    const ctx=croak.ctx||(croak.ctx=new A()), t=ctx.currentTime;
+    for(const [at,f] of [[0,150],[.22,120]]){
+      const o=ctx.createOscillator(), g=ctx.createGain();
+      o.type="sawtooth";o.frequency.setValueAtTime(f*1.4,t+at);o.frequency.exponentialRampToValueAtTime(f,t+at+.16);
+      g.gain.setValueAtTime(.0001,t+at);g.gain.exponentialRampToValueAtTime(.25,t+at+.02);g.gain.exponentialRampToValueAtTime(.0001,t+at+.18);
+      o.connect(g).connect(ctx.destination);o.start(t+at);o.stop(t+at+.2);
+    }
+  }catch(e){}
+}
 function renderWin(){
   const g=G(), L=S.last||{name:g.gp[g.rem.indexOf(0)]||g.gp[0]}, m=M();
   $("trophy").innerHTML=TOAD;
   $("winName").textContent=L.name;
+  celebrate(L.name+"|"+g.hist.length);
   $("results").innerHTML=columns(true,g.gp.indexOf(L.name));
   $("undoWinBtn").hidden=!(S.last&&g.hist.length);
   const A=$("againBtn"), B=$("changeBtn");
@@ -1051,6 +1199,8 @@ $("modeSingle").addEventListener("click",()=>{S.mode="single";render()});
 $("modeTour").addEventListener("click",()=>{S.mode="tournament";render();if(NET.on)loadLiveList()});
 $("fmtQuali").addEventListener("click",()=>{S.tourFormat="quali";render()});
 $("fmtByes").addEventListener("click",()=>{S.tourFormat="byes";render()});
+$("meSel").addEventListener("change",()=>{if(S.live){S.live.me=$("meSel").value||null;S.live.meCalled=undefined;save();render()}});
+$("soundOn").addEventListener("change",()=>{try{localStorage.setItem("toads31.sound",$("soundOn").checked?"on":"off")}catch(e){}if($("soundOn").checked)croak()});
 $("perSel").addEventListener("change",()=>{S.qualiPer=+$("perSel").value;save();render()});
 $("modeDuo").addEventListener("click",()=>{S.mode="duo";if(!S.teams.length&&S.players.length>=2)addTeam();else render()});
 $("addTeamBtn").addEventListener("click",addTeam);
@@ -1089,8 +1239,19 @@ if(NET.on){
     if(e.target.closest("[data-open]")){follow(id);return}
     if(e.target.closest("[data-cancel]")){NET.tourAct=null;render();return}
     const tb=e.target.closest("[data-tbl]");if(tb){tb.disabled=true;tableAction(id,tb.dataset.tbl,+tb.dataset.k);return}
+    if(e.target.closest("[data-wdgo]")){
+      const name=card.querySelector("[data-wd]").value;if(!name)return;
+      if(NET.wdArmed!==name){NET.wdArmed=name;render();return}
+      e.target.disabled=true;leaveAction(id,name);return;
+    }
+    if(e.target.closest("[data-fixgo]")){e.target.disabled=true;fixAction(id,e.target.closest("form"));return}
     if(yes){tourAction(id,yes.dataset.yes,yes);return}
     if(act){NET.toursMsg="";if(act.dataset.act==="edit")startEdit(id);else{NET.tourAct={id,kind:act.dataset.act};render()}}
+  });
+  // Picking a match to correct shows its two players as the possible winners
+  $("toursList").addEventListener("change",e=>{
+    if(e.target.matches("[data-fixm]")){NET.fixSel=e.target.value;render()}
+    if(e.target.matches("[data-wd]")&&NET.wdArmed){NET.wdArmed=null;render()}
   });
   $("toursList").addEventListener("submit",e=>{const f=e.target.closest("form[data-edit]");if(f){e.preventDefault();saveEdit(f)}});
   $("wipeBtn").addEventListener("click",()=>{$("wipeConfirm").hidden=false;$("wipeInput").value="";render();$("wipeInput").focus()});
@@ -1252,7 +1413,7 @@ if(NET.on){
   if(S.live&&!liveHash()&&!TV)setHash(S.live.id);
   $("tvSwitch").addEventListener("click",()=>{if(TV){TV.showQuali=!TV.showQuali;render()}});
   $("tvExit").addEventListener("click",()=>{try{history.replaceState(null,"",location.pathname+location.search)}catch(e){}closeTV()});
-  document.addEventListener("visibilitychange",()=>{if(TV&&document.visibilityState==="visible"){keepAwake();tvFetch(false)}});
+  document.addEventListener("visibilitychange",()=>{if(TV&&document.visibilityState==="visible"){keepAwake();tvFetch(false)}else gameAwake()});
   setInterval(()=>{if(S.live&&document.visibilityState==="visible"){if(S.live.queue.length)liveFlush();else liveFetch(false)}},LIVE_POLL);
   document.addEventListener("visibilitychange",()=>{if(S.live&&document.visibilityState==="visible")liveFlush()});
   window.addEventListener("online",()=>{if(S.live)liveFlush()});

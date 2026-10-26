@@ -685,7 +685,40 @@ function renderLivePanel(){
   $("pinForm").hidden=!p;
   if(p)$("pinLabel").textContent=`Enter the scoring PIN to ${p.takeover?"take over":"score"} ${tname(p.k)}.`;
   $("liveEnd").hidden=!(org&&L.status!=="ended");
+  renderMe();
   liveStatus();
+}
+// My matches: the player picks their name once per tournament (kept on this phone) and sees their next match
+const ME=()=>S.live&&S.live.me&&drawNames(TOUR()).includes(S.live.me)?S.live.me:null;
+function renderMe(){
+  const t=TOUR(), names=drawNames(t).slice().sort((a,b)=>a.localeCompare(b,"en-GB",{sensitivity:"base"})), me=ME();
+  $("meBox").hidden=!names.length;
+  if(document.activeElement!==$("meSel"))$("meSel").innerHTML=`<option value="">Not playing / just watching</option>`+names.map(n=>`<option${n===me?" selected":""}>${esc(n)}</option>`).join("");
+  const nx=me?myNext(t,me):null;
+  $("meNext").hidden=!nx;
+  if(!nx)return;
+  $("meNext").innerHTML=nx.html;$("meNext").className="menext"+(nx.now?" now":"");
+  // Tell the player once when their match gets a table
+  const key=nx.now?nx.key:null;
+  if(key&&S.live.meCalled!==key&&S.live.meCalled!==undefined){try{navigator.vibrate&&navigator.vibrate([200,100,200])}catch(e){}if(soundOn())croak()}
+  S.live.meCalled=key;
+}
+function myNext(t,me){
+  const list=all(), mine=list.filter(({m})=>!m.winner&&!m.bye&&(m.a===me||m.b===me));
+  const on=mine.find(({m})=>m.table!=null);
+  const vs=m=>esc(m.a===me?m.b:m.a);
+  if(on)return {now:true,key:`${on.ri}:${on.mi}`,html:`You're on <b>${TN(on.m.table)}</b> now: v ${vs(on.m)} (${roundName(on.ri)}${gameNo(on.m)>1?`, game ${gameNo(on.m)}`:""}).`};
+  const nextUp=mine.find(({m})=>m.a&&m.b);
+  if(nextUp){
+    const queue=list.filter(({m})=>ready(m)&&m.table==null), ahead=queue.findIndex(x=>x.m===nextUp.m);
+    return {html:`Next: v ${vs(nextUp.m)} (${roundName(nextUp.ri)}). Waiting for a table${ahead>0?`, ${ahead} match${ahead===1?"":"es"} before yours`:": you're next"}.`};
+  }
+  if(t.champion===me)return {html:`You're the champion! ${TOAD}`};
+  if(mine.length)return {html:"Waiting for your next opponent's match to finish."};
+  if(t.rounds.some(r=>r.some(m=>m.winner&&!m.bye&&(m.a===me||m.b===me)&&m.winner!==me)))return {html:"You're out. Thanks for playing!"};
+  if(t.quali&&!qualiDone())return {html:"Your qualifying matches are done. Waiting for the others to finish."};
+  if(t.quali&&!t.rounds.some(r=>r.some(m=>m.a===me||m.b===me)))return {html:"You didn't make the knockout this time. Thanks for playing!"};
+  return {html:"Waiting for your next match."};
 }
 // Live extras on a table card: who is scoring it, and the buttons that go with that
 function liveCard(k,x){
@@ -777,7 +810,7 @@ function renderHub(){
       continue;
     }
     const {m,ri,mi}=x, g=m.game&&!m.game.done?m.game:null;
-    cards+=`<div class="tcard"><div class="tn"><span>${TN(k)}</span><span class="pill${g?"":" idle"}">${g?"Playing":"Ready"}</span></div>
+    cards+=`<div class="tcard${ME()&&(m.a===ME()||m.b===ME())?" me":""}"><div class="tn"><span>${TN(k)}</span><span class="pill${g?"":" idle"}">${g?"Playing":"Ready"}</span></div>
       <div class="tw">${esc(m.a)} v ${esc(m.b)}</div>
       <div class="ti">${roundName(ri)} · Game ${gameNo(m)}${gameNo(m)>1?` · ${m.wa}–${m.wb}`:""}</div>
       ${g?`<div class="live">${g.gp.map((p,i)=>`${esc(p)} ${g.rem[i]}`).join(" · ")} left</div>`:""}
@@ -816,7 +849,7 @@ function qualiHTML(tv){
   const played=q.matches.filter(m=>m.winner).length;
   // Underline what put a player below the one above when they won as many matches
   const dec=i=>{if(!i)return"";const a=st[i-1],b=st[i];if(a.w!==b.w||!b.pl)return"";return a.gw-a.gl!==b.gw-b.gl?"gd":a.avg!==b.avg?"avg":""};
-  const row=(r,i)=>{const d=dec(i);return `<tr class="${i<q.K?"in":""}${i===q.K-1?" cut":""}"><td>${i+1}</td><td class="nm">${esc(r.name)}</td><td>${r.pl}</td><td>${r.w}</td><td${d==="gd"?' class="dec"':""}>${r.gw-r.gl>0?"+":""}${r.gw-r.gl}</td><td${d==="avg"?' class="dec"':""}>${r.toads?r.avg.toFixed(2):"–"}</td></tr>`};
+  const row=(r,i)=>{const d=dec(i);return `<tr class="${i<q.K?"in":""}${i===q.K-1?" cut":""}${!tv&&r.name===ME()?" me":""}"><td>${i+1}</td><td class="nm">${esc(r.name)}</td><td>${r.pl}</td><td>${r.w}</td><td${d==="gd"?' class="dec"':""}>${r.gw-r.gl>0?"+":""}${r.gw-r.gl}</td><td${d==="avg"?' class="dec"':""}>${r.toads?r.avg.toFixed(2):"–"}</td></tr>`};
   const rows=st.map(row).join(""), thead=`<thead><tr><th>#</th><th class="nm">Player</th><th title="Matches played">Pl</th><th title="Matches won">W</th><th title="Games won minus lost">+/−</th><th title="Average per toad">Avg</th></tr></thead>`;
   // The TV screen shows the table in two halves side by side
   if(tv){const h=Math.ceil(st.length/2);return `<div class="qhead"><h3>Qualifying</h3><span>${played} of ${q.matches.length} played · top ${q.K} go through</span></div>
@@ -837,7 +870,7 @@ function bracketHTML(){
       if(isB&&m.bye)return `<div class="bp tbd"><span>bye</span></div>`;
       if(!name)return `<div class="bp tbd"><span>?</span></div>`;
       const cls=m.winner?(m.winner===name?" w":" l"):"";
-      return `<div class="bp${cls}"><span>${esc(name)}</span>${m.bye?"":`<span class="s">${w}</span>`}</div>`;
+      return `<div class="bp${cls}${!TV&&name===ME()?" me":""}"><span>${esc(name)}</span>${m.bye?"":`<span class="s">${w}</span>`}</div>`;
     };
     return `<div class="bm${live?" now":""}">${live?`<span class="tb">${TN(m.table)}</span>`:""}${line(m.a,m.wa,false)}${line(m.b,m.wb,true)}</div>`;
   }).join("")+`</div></div>`).join("");
@@ -1127,6 +1160,7 @@ $("modeSingle").addEventListener("click",()=>{S.mode="single";render()});
 $("modeTour").addEventListener("click",()=>{S.mode="tournament";render();if(NET.on)loadLiveList()});
 $("fmtQuali").addEventListener("click",()=>{S.tourFormat="quali";render()});
 $("fmtByes").addEventListener("click",()=>{S.tourFormat="byes";render()});
+$("meSel").addEventListener("change",()=>{if(S.live){S.live.me=$("meSel").value||null;S.live.meCalled=undefined;save();render()}});
 $("soundOn").addEventListener("change",()=>{try{localStorage.setItem("toads31.sound",$("soundOn").checked?"on":"off")}catch(e){}if($("soundOn").checked)croak()});
 $("perSel").addEventListener("change",()=>{S.qualiPer=+$("perSel").value;save();render()});
 $("modeDuo").addEventListener("click",()=>{S.mode="duo";if(!S.teams.length&&S.players.length>=2)addTeam();else render()});

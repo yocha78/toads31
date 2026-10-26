@@ -131,6 +131,10 @@
       <button class="ghost" id="addTeamBtn">Add a team</button>
       <p class="hint" id="teamHint"></p>
     </div>
+    <details class="drawprev" id="drawPrev" hidden>
+      <summary><b>Preview the draw</b> <span class="hint" id="drawPrevSum"></span></summary>
+      <div id="drawPrevBody"></div>
+    </details>
     <button class="ghost" id="shuffleBtn" hidden>Shuffle the draw</button>
     <button class="primary big" id="startBtn" disabled>Start game</button>
   </section>
@@ -343,11 +347,12 @@
     <button class="ghost" id="undoWinBtn">Undo winning throw</button>
   </section>
   <p class="hint" id="syncNote" style="text-align:center" aria-live="polite" hidden></p>
-  <p class="hint" style="text-align:center">Version 26 Oct 2026 · Easier scoring</p>
+  <p class="hint" style="text-align:center">Version 26 Oct 2026 · Draw preview and TV call-out</p>
 </div>
 
 <!-- TV SCREEN (#tv-<code>): one tournament for a big screen in the pub -->
 <section id="tvView" class="tv" hidden>
+  <div class="tvcall" id="tvCall" hidden aria-live="polite"></div>
   <header class="tvhead">
     <h1 id="tvTitle"></h1>
     <span class="tvinfo" id="tvInfo"></span>

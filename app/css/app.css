@@ -106,9 +106,6 @@ ul.players li:last-child{border-bottom:0}
 @keyframes finpulse{50%{transform:scale(1.08)}}
 .need .canfin{color:var(--scored);font-weight:700}
 .gamesync{margin:0;text-align:center} .gamesync.bad{color:var(--bad)}
-/* Scoring with one hand: the board on top, the toads near the thumb */
-#game .wrap{display:flex;flex-direction:column}
-#game .chalk{order:-1;max-height:40vh;max-height:40dvh;overflow:auto}
 /* Win: toads hop up behind the winner's name */
 .win{position:relative;overflow:hidden}
 .hops{position:absolute;left:0;right:0;top:0;height:200px;pointer-events:none}

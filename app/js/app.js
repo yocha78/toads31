@@ -52,6 +52,7 @@ function render(){
   const v=views[S.stage];
   if(!v){S.stage="setup";return render()}
   $(v[0]).hidden=false;v[1]();
+  gameAwake();
   save();
   if(NET.on)syncGames();
 }
@@ -207,6 +208,7 @@ function renderMenu(){
   if(org)$("venueAdmin").innerHTML=NET.venues.slice().sort(byName).map(v=>`<li data-venue="${esc(v.id)}">
     <input type="text" value="${esc(v.name)}" maxlength="60" aria-label="Venue name"><button class="x" data-vsave>Save</button><button class="x" data-vdel>${NET.armed==="venue:"+v.id?"Tap again to delete":"Delete"}</button></li>`).join("")||`<li class="hint">No venues yet.</li>`;
   $("wipeYes").disabled=$("wipeInput").value.trim()!=="DELETE";
+  $("soundOn").checked=soundOn();
 }
 function openMenu(){
   if(!["menu","players","stats","tours"].includes(S.stage))S.menuFrom=S.stage;
@@ -336,6 +338,14 @@ async function openTV(id){
 function closeTV(){TV=null;clearInterval(tvTimer);tvTimer=null;try{wake&&wake.release()}catch(e){}wake=null;render()}
 // Ask the screen not to go to sleep (where the browser allows it)
 async function keepAwake(){try{if(TV&&navigator.wakeLock&&document.visibilityState==="visible")wake=await navigator.wakeLock.request("screen")}catch(e){}}
+// The scoring phone stays on during a game (screens otherwise dim and lock between turns)
+async function gameAwake(){
+  const want=!TV&&["game","order"].includes(S.stage)&&document.visibilityState==="visible";
+  try{
+    if(want&&!wake&&navigator.wakeLock){wake=await navigator.wakeLock.request("screen");wake.addEventListener("release",()=>{wake=null})}
+    else if(!want&&!TV&&wake){const w=wake;wake=null;await w.release()}
+  }catch(e){}
+}
 async function tvFetch(full){
   const T=TV;if(!T)return;
   const r=await ToadsApi.tour("GET",`/${T.id}`+(full||!T.tour?"":`?since=${T.ver}`));
@@ -589,6 +599,7 @@ function liveStatus(){
   $("liveSync").textContent=q?(L.offline?`Offline: ${q} change${q===1?"":"s"} waiting to send.`:"Sending…")
     :L.offline?`Offline: showing the scores from ${ago(Date.now()-(L.seen||0))}.`:L.seen?`Updated ${ago(Date.now()-L.seen)}.`:"";
   $("liveSync").className="hint"+(L.offline?" bad":"");
+  if(S.stage==="game")gameSync();
 }
 async function claimTable(k,takeover){
   const L=S.live;
@@ -809,24 +820,60 @@ function renderGame(){
   const g=G(), r=g.rem[g.cur], m=M();
   $("turnName").textContent=throwerOf(g,g.cur);
   const c=coinsFor(g.hist.length,r);
-  $("turnNeed").textContent=`${g.members?g.gp[g.cur]+" · ":""}Needs ${r} · ${c} toad${c>1?"s":""} (max ${c*2}) · Round ${g.round}`;
+  const fin=r<=c*2;
+  $("turnNeed").innerHTML=esc(`${g.members?g.gp[g.cur]+" · ":""}Needs ${r} · ${c} toad${c>1?"s":""} (max ${c*2}) · Round ${g.round}`)+(fin?` · <span class="canfin">can finish now</span>`:"");
   $("matchInfo").hidden=!m;
   if(m)$("matchInfo").textContent=`${tname(m.table)} · ${roundName(S.focus.ri)} · Game ${gameNo(m)} · ${m.a} ${m.wa}–${m.wb} ${m.b}`;
   $("quitBtn").textContent=m?"Back to tables":"End game";
-  $("pad").innerHTML=Toads.keypad(c,r).map(({n,bust})=>`<button data-s="${n}" class="${bust?"over":""}" aria-label="Score ${n}${bust?' (bust)':''}">${n}</button>`).join("");
+  $("pad").innerHTML=Toads.keypad(c,r).map(({n,bust})=>`<button data-s="${n}" class="${bust?"over":n===r?"fin":""}" aria-label="Score ${n}${bust?' (bust)':n===r?' (finishes)':''}">${n}</button>`).join("");
   closeFinish();
-  $("undoBtn").disabled=g.hist.length===0;
+  // Undo names the turn it takes back
+  const last=g.hist[g.hist.length-1];
+  $("undoBtn").disabled=!last;
+  $("undoBtn").textContent=last?`Undo ${last.who}'s ${last.bust?"bust":last.s}`:"Undo last turn";
+  gameSync();
   // Watching a live table scored on another phone: the board only
   const watch=!scoring();
   $("pad").hidden=watch;$("undoBtn").hidden=watch;
   if(watch){$("msg").textContent=S.live.status==="ended"?"The tournament has ended.":"Watching: the scores come from the phone at the table.";$("msg").className="msg"}
   $("board").innerHTML=columns(false);
+  const bw=$("board").parentElement;bw.scrollTop=bw.scrollHeight;
+}
+// On the game screen of a live table: say when scores are waiting for a signal
+function gameSync(){
+  const L=S.live, el=$("gameSync");
+  const q=L&&scoring()?L.queue.length:0;
+  el.textContent=!L||!scoring()?"":q?(L.offline?`No signal: ${q} score${q===1?"":"s"} kept on this phone, sent when it's back.`:"Sending…"):L.offline?"No signal right now. Keep scoring: nothing is lost.":"";
+  el.className="hint gamesync"+(L&&L.offline?" bad":"");
+  el.hidden=!el.textContent;
 }
 
+// Toads hop up once per win (not on every redraw), with an optional croak
+let cheered=null;
+function celebrate(key){
+  if(cheered===key)return;cheered=key;
+  $("hops").innerHTML=Array.from({length:9},(_,i)=>TOAD.replace('class="toad"',`class="toad" style="left:${6+i*10.5}%;animation-delay:${(i%3)*.15+i*.04}s"`)).join("");
+  if(soundOn())croak();
+}
+const soundOn=()=>{try{return localStorage.getItem("toads31.sound")==="on"}catch(e){return false}};
+// A short two-note croak, made on the phone (no sound file)
+function croak(){
+  try{
+    const A=window.AudioContext||window.webkitAudioContext;if(!A)return;
+    const ctx=croak.ctx||(croak.ctx=new A()), t=ctx.currentTime;
+    for(const [at,f] of [[0,150],[.22,120]]){
+      const o=ctx.createOscillator(), g=ctx.createGain();
+      o.type="sawtooth";o.frequency.setValueAtTime(f*1.4,t+at);o.frequency.exponentialRampToValueAtTime(f,t+at+.16);
+      g.gain.setValueAtTime(.0001,t+at);g.gain.exponentialRampToValueAtTime(.25,t+at+.02);g.gain.exponentialRampToValueAtTime(.0001,t+at+.18);
+      o.connect(g).connect(ctx.destination);o.start(t+at);o.stop(t+at+.2);
+    }
+  }catch(e){}
+}
 function renderWin(){
   const g=G(), L=S.last||{name:g.gp[g.rem.indexOf(0)]||g.gp[0]}, m=M();
   $("trophy").innerHTML=TOAD;
   $("winName").textContent=L.name;
+  celebrate(L.name+"|"+g.hist.length);
   $("results").innerHTML=columns(true,g.gp.indexOf(L.name));
   $("undoWinBtn").hidden=!(S.last&&g.hist.length);
   const A=$("againBtn"), B=$("changeBtn");
@@ -1051,6 +1098,7 @@ $("modeSingle").addEventListener("click",()=>{S.mode="single";render()});
 $("modeTour").addEventListener("click",()=>{S.mode="tournament";render();if(NET.on)loadLiveList()});
 $("fmtQuali").addEventListener("click",()=>{S.tourFormat="quali";render()});
 $("fmtByes").addEventListener("click",()=>{S.tourFormat="byes";render()});
+$("soundOn").addEventListener("change",()=>{try{localStorage.setItem("toads31.sound",$("soundOn").checked?"on":"off")}catch(e){}if($("soundOn").checked)croak()});
 $("perSel").addEventListener("change",()=>{S.qualiPer=+$("perSel").value;save();render()});
 $("modeDuo").addEventListener("click",()=>{S.mode="duo";if(!S.teams.length&&S.players.length>=2)addTeam();else render()});
 $("addTeamBtn").addEventListener("click",addTeam);
@@ -1252,7 +1300,7 @@ if(NET.on){
   if(S.live&&!liveHash()&&!TV)setHash(S.live.id);
   $("tvSwitch").addEventListener("click",()=>{if(TV){TV.showQuali=!TV.showQuali;render()}});
   $("tvExit").addEventListener("click",()=>{try{history.replaceState(null,"",location.pathname+location.search)}catch(e){}closeTV()});
-  document.addEventListener("visibilitychange",()=>{if(TV&&document.visibilityState==="visible"){keepAwake();tvFetch(false)}});
+  document.addEventListener("visibilitychange",()=>{if(TV&&document.visibilityState==="visible"){keepAwake();tvFetch(false)}else gameAwake()});
   setInterval(()=>{if(S.live&&document.visibilityState==="visible"){if(S.live.queue.length)liveFlush();else liveFetch(false)}},LIVE_POLL);
   document.addEventListener("visibilitychange",()=>{if(S.live&&document.visibilityState==="visible")liveFlush()});
   window.addEventListener("online",()=>{if(S.live)liveFlush()});

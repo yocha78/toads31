@@ -100,6 +100,29 @@ ul.players li:last-child{border-bottom:0}
 .pad button:active{transform:scale(.9) rotate(-4deg)}
 .pad button:focus-visible{outline:2px solid var(--brass,#b8892f);outline-offset:2px;border-radius:10px}
 .pad button.over{filter:grayscale(1);opacity:.45}
+/* The score that finishes the game: a brass toad, with a gentle pulse */
+.pad button.fin{background-image:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 14'><g fill='%23d9a845'><circle cx='4.5' cy='3.5' r='2.6'/><circle cx='11.5' cy='3.5' r='2.6'/><ellipse cx='8' cy='9' rx='7' ry='4.6'/></g><circle cx='4.5' cy='3.2' r='1' fill='%231f2a26'/><circle cx='11.5' cy='3.2' r='1' fill='%231f2a26'/></svg>");color:#1c1303}
+@media (prefers-reduced-motion:no-preference){.pad button.fin{animation:finpulse 1.6s ease-in-out infinite}}
+@keyframes finpulse{50%{transform:scale(1.08)}}
+.need .canfin{color:var(--scored);font-weight:700}
+.gamesync{margin:0;text-align:center} .gamesync.bad{color:var(--bad)}
+/* Scoring with one hand: the board on top, the toads near the thumb */
+#game .wrap{display:flex;flex-direction:column}
+#game .chalk{order:-1;max-height:40vh;max-height:40dvh;overflow:auto}
+/* Win: toads hop up behind the winner's name */
+.win{position:relative;overflow:hidden}
+.hops{position:absolute;left:0;right:0;top:0;height:200px;pointer-events:none}
+.hops .toad{position:absolute;bottom:-40px;width:26px;height:22px;fill:var(--chalk-yellow);opacity:0}
+@media (prefers-reduced-motion:no-preference){
+  .hops .toad{animation:hop 1.5s ease-out forwards}
+  .win .trophy{animation:bounce .7s ease-out 2}
+}
+@keyframes hop{0%{opacity:0;transform:translateY(0)}15%{opacity:1}55%{transform:translateY(-180px) rotate(-12deg)}100%{opacity:0;transform:translateY(-60px) rotate(8deg)}}
+@keyframes bounce{40%{transform:translateY(-10px) scale(1.1)}}
+.howto{border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.howto summary{cursor:pointer}
+.howto ul{margin:8px 0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
+.soundsw{padding:4px 2px}
 .msg{min-height:1.4em;text-align:center;font-weight:700;margin:0}
 .msg.bad{color:var(--bad)} .msg.good{color:var(--good)}
 /* "Al scores 8." under the score pad: wood brown, like the frame round the scoreboard */

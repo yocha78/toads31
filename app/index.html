@@ -142,6 +142,18 @@
       <button type="button" id="menuPlayers"><b>Players &amp; stats</b><span>Each player's games, wins and averages</span></button>
       <button type="button" id="menuTours"><b>Tournaments</b><span>Follow one, put it on a TV screen, or (organiser) edit, restart and delete</span></button>
     </nav>
+    <details class="howto">
+      <summary><b>How to play</b></summary>
+      <ul>
+        <li>Everyone starts on <b>31</b> and counts down. The first to hit <b>exactly 0</b> wins.</li>
+        <li>Throw your toads at the table: one <b>in the hole scores 2</b>, one <b>left on the table scores 1</b>, one on the floor scores 0.</li>
+        <li>Toads per turn: <b>2</b> in your first turn, <b>3</b> in your second, then <b>4</b> (never more than the points you need).</li>
+        <li><b>Bust:</b> score more than you need and your score stays where it was.</li>
+        <li>Before each game everyone throws one toad: closest to the hole throws first. In a tournament, a match is first to 2 games.</li>
+      </ul>
+      <p class="hint">Scoring: tap the toad with the points the thrower made. A toad turns brass when that score finishes the game.</p>
+    </details>
+    <label class="check soundsw"><input type="checkbox" id="soundOn"> Croak when someone wins</label>
     <div class="orgbox" id="orgBox">
       <h2>Organiser</h2>
       <form class="row" id="orgLogin">
@@ -296,6 +308,7 @@
         <div class="who" id="turnName"></div>
         <div class="need" id="turnNeed"></div>
         <p class="msg" id="msg" aria-live="polite"></p>
+        <p class="hint gamesync" id="gameSync" hidden></p>
         <div class="pad" id="pad"></div>
         <div class="ask" id="finishAsk" hidden>
           <p id="finishQ"></p>
@@ -318,6 +331,7 @@
   <!-- WIN -->
   <section id="win" class="panel win" hidden>
     <h2 id="winLabel">Winner</h2>
+    <div class="hops" id="hops" aria-hidden="true"></div>
     <div class="winrow"><span class="trophy" id="trophy" aria-hidden="true"></span><div class="who" id="winName"></div></div>
     <p class="sub" id="winInfo"></p>
     <div class="actions">
@@ -329,7 +343,7 @@
     <button class="ghost" id="undoWinBtn">Undo winning throw</button>
   </section>
   <p class="hint" id="syncNote" style="text-align:center" aria-live="polite" hidden></p>
-  <p class="hint" style="text-align:center">Version 25 Oct 2026 · Qualifying matches each</p>
+  <p class="hint" style="text-align:center">Version 26 Oct 2026 · Easier scoring</p>
 </div>
 
 <!-- TV SCREEN (#tv-<code>): one tournament for a big screen in the pub -->

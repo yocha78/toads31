@@ -250,6 +250,11 @@
         <p class="hint" id="liveInfo"></p>
         <p class="hint" id="liveSync" aria-live="polite"></p>
         <p class="msg" id="liveNote" aria-live="polite"></p>
+        <div class="mebox" id="meBox" hidden>
+          <label for="meSel">Playing? Pick your name to see your matches</label>
+          <select id="meSel"></select>
+          <p class="menext" id="meNext" aria-live="polite" hidden></p>
+        </div>
         <form class="pinform" id="pinForm" hidden>
           <label for="pinInput" id="pinLabel"></label>
           <div class="row">
@@ -347,7 +352,7 @@
     <button class="ghost" id="undoWinBtn">Undo winning throw</button>
   </section>
   <p class="hint" id="syncNote" style="text-align:center" aria-live="polite" hidden></p>
-  <p class="hint" style="text-align:center">Version 26 Oct 2026 · Draw preview and TV call-out</p>
+  <p class="hint" style="text-align:center">Version 26 Oct 2026 · My matches</p>
 </div>
 
 <!-- TV SCREEN (#tv-<code>): one tournament for a big screen in the pub -->

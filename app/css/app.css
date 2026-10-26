@@ -123,6 +123,12 @@ ul.players li:last-child{border-bottom:0}
 .howto summary{cursor:pointer}
 .howto ul{margin:8px 0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
 .soundsw{padding:4px 2px}
+/* My matches: a player following a tournament picks their name */
+.mebox{display:flex;flex-direction:column;gap:6px;font-size:.88rem;color:var(--muted)}
+.menext{margin:0;padding:10px 12px;border-radius:10px;background:var(--bg);color:var(--ink);font-size:1rem;border-left:4px solid var(--brass)}
+.menext.now{background:var(--brass);color:var(--brass-ink);border-left-color:var(--wood-dark);font-weight:700}
+.tcard.me{border:2px solid var(--brass)}
+.bm .bp.me span:first-child,.qtab tr.me .nm{text-decoration:underline;text-decoration-color:var(--chalk-yellow);text-underline-offset:3px}
 /* Setup: the matches the draw makes, before starting */
 .drawprev{border:1px solid var(--line);border-radius:12px;padding:10px 12px}
 .drawprev summary{cursor:pointer}
@@ -397,3 +403,4 @@ body.tvmode{background:#141a18;color:var(--chalk);overflow:hidden}
   .tvboard .bracket{grid-auto-columns:minmax(110px,1fr);overflow-x:auto}
   .qsplit{grid-template-columns:1fr}
 }
+.menext .toad{width:18px;height:15px;fill:var(--brass);vertical-align:-2px}

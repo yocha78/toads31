@@ -123,6 +123,21 @@ ul.players li:last-child{border-bottom:0}
 .howto summary{cursor:pointer}
 .howto ul{margin:8px 0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
 .soundsw{padding:4px 2px}
+/* Setup: the matches the draw makes, before starting */
+.drawprev{border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.drawprev summary{cursor:pointer}
+.drawprev ol{margin:8px 0 0;padding-left:22px;columns:2;column-gap:18px;font-size:.92rem}
+.drawprev li{break-inside:avoid;padding:1px 0}
+.drawprev h4{margin:10px 0 2px;font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+/* TV: a new match on a table is called out in big letters for a few seconds */
+.tvcall{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:5;background:var(--slate);border:.35em solid var(--wood);border-radius:.6em;box-shadow:0 1em 3em rgba(0,0,0,.6);padding:1em 2em;text-align:center;font-size:2.4em;max-width:90vw}
+.tvcall p{margin:.15em 0}
+.tvcall b{font-family:var(--chalk-display);color:var(--chalk-yellow)}
+.tvcall span{display:block;font-size:.55em;color:var(--chalk-dim)}
+@media (prefers-reduced-motion:no-preference){.tvcall{animation:callin .4s ease-out}}
+@keyframes callin{from{transform:translate(-50%,-50%) scale(.7);opacity:0}}
+/* Qualifying: the column that separated two players on the same number of wins */
+.qtab td.dec{text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:3px;font-weight:700}
 .msg{min-height:1.4em;text-align:center;font-weight:700;margin:0}
 .msg.bad{color:var(--bad)} .msg.good{color:var(--good)}
 /* "Al scores 8." under the score pad: wood brown, like the frame round the scoreboard */

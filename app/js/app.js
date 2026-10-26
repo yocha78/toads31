@@ -81,6 +81,7 @@ function renderSetup(){
   $("noPlayers").hidden=n>0;
   $("noPlayers").textContent=T?"Add at least two players.":D?"Add players, then put them into teams of two below.":"Add one or more players.";
   $("shuffleBtn").hidden=!(T&&n>2);
+  renderDrawPreview(T,n);
   if(NET.on)renderOnline();
   if(NET.on)renderLiveSetup();
   setupStart();
@@ -109,6 +110,21 @@ function renderPer(on){
   $("perSel").innerHTML=Toads.qualiPers(n).map(m=>`<option value="${m}"${m===per?" selected":""}>${m} (${perTable(tourMatches(n,m).total,tables)} per table)</option>`).join("");
   const c=tourMatches(n,per);
   $("perHint").textContent=`${c.quali} qualifying matches, ${c.total} in all with the knockout, on ${tables} table${tables===1?"":"s"}.`+(n%2?" Odd numbers need an even number of players.":"");
+}
+// The matches the draw makes with the list as it stands, so the organiser can shuffle before starting
+function renderDrawPreview(T,n){
+  $("drawPrev").hidden=!(T&&n>=3);if($("drawPrev").hidden)return;
+  const K=knockSize(n);
+  if(K<n&&S.tourFormat==="byes"){$("drawPrevSum").textContent="byes are drawn at random when you start";$("drawPrevBody").innerHTML="";return}
+  const t=buildTour(S.players.slice(),S.tables,S.tourFormat,()=>0,qualiPer(n)), vs=m=>`<li>${esc(m.a)} v ${esc(m.b)}</li>`;
+  if(t.quali){
+    $("drawPrevSum").textContent=`${t.quali.matches.length} qualifying matches`;
+    $("drawPrevBody").innerHTML=`<ol>${t.quali.matches.map(vs).join("")}</ol>`;
+  }else{
+    const r0=t.rounds[0];
+    $("drawPrevSum").textContent=`${Toads.roundName(t,0)}: ${r0.length} match${r0.length===1?"":"es"}`;
+    $("drawPrevBody").innerHTML=`<ol>${r0.map(m=>m.bye?`<li>${esc(m.a)}: bye</li>`:vs(m)).join("")}</ol>`;
+  }
 }
 function tourHint(n){
   const base="Knockout, one against one. First to win 2 games takes the match, and winners meet in the next round.";
@@ -370,6 +386,7 @@ function renderTV(){
   if(!t)return;
   Toads.settle(t);
   const list=all(), on=list.filter(({m})=>m.table!=null&&!m.winner).sort((x,y)=>x.m.table-y.m.table);
+  tvCallOut(on);
   $("tvNow").innerHTML=on.map(({m,ri})=>{
     const g=m.game&&!m.game.done?m.game:null, k=m.table, claimed=T.claims&&T.claims[k];
     const side=(name,w)=>{const i=g?g.gp.indexOf(name):-1;return `<div class="tvp${g&&g.cur===i?" up":""}"><span>${esc(name)}</span><i>${w}</i><b>${g?ringIf(g.rem[i]):""}</b></div>`};
@@ -390,6 +407,16 @@ function renderTV(){
   $("tvQuali").innerHTML=quali?qualiHTML(true):"";
   $("tvBracket").innerHTML=quali?`<p class="tvlater">${done?`Qualifying is complete: the top ${t.quali.K} play the knockout,`:`Then the top ${t.quali.K} play a knockout:`} ${t.rounds.map((_,ri)=>roundName(ri).toLowerCase()).join(", ")}.</p>`:bracketHTML();
   fitTV();
+}
+// When a table gets a new match, call it out for 12 seconds ("Al v Bo → Garden"). Not on the first look.
+function tvCallOut(on){
+  const T=TV, now=Object.fromEntries(on.map(({m,ri})=>[m.table,`${ri}:${m.a}:${m.b}`]));
+  const fresh=T.tables?on.filter(({m})=>!m.game&&T.tables[m.table]!==now[m.table]):[];
+  T.tables=now;
+  if(!fresh.length)return;
+  $("tvCall").innerHTML=fresh.map(({m,ri})=>`<p><b>${esc(m.a)} v ${esc(m.b)}</b> → ${TN(m.table)}<span>${roundName(ri)}</span></p>`).join("");
+  $("tvCall").hidden=false;
+  clearTimeout(T.callTimer);T.callTimer=setTimeout(()=>{$("tvCall").hidden=true},12000);
 }
 // Everything stays on one screen: shrink the text of a side until it fits (no scrolling on a TV)
 function fitTV(){
@@ -787,7 +814,9 @@ function renderHub(){
 function qualiHTML(tv){
   const q=TOUR().quali, st=standings(), done=qualiDone();
   const played=q.matches.filter(m=>m.winner).length;
-  const row=(r,i)=>`<tr class="${i<q.K?"in":""}${i===q.K-1?" cut":""}"><td>${i+1}</td><td class="nm">${esc(r.name)}</td><td>${r.pl}</td><td>${r.w}</td><td>${r.gw-r.gl>0?"+":""}${r.gw-r.gl}</td><td>${r.toads?r.avg.toFixed(2):"–"}</td></tr>`;
+  // Underline what put a player below the one above when they won as many matches
+  const dec=i=>{if(!i)return"";const a=st[i-1],b=st[i];if(a.w!==b.w||!b.pl)return"";return a.gw-a.gl!==b.gw-b.gl?"gd":a.avg!==b.avg?"avg":""};
+  const row=(r,i)=>{const d=dec(i);return `<tr class="${i<q.K?"in":""}${i===q.K-1?" cut":""}"><td>${i+1}</td><td class="nm">${esc(r.name)}</td><td>${r.pl}</td><td>${r.w}</td><td${d==="gd"?' class="dec"':""}>${r.gw-r.gl>0?"+":""}${r.gw-r.gl}</td><td${d==="avg"?' class="dec"':""}>${r.toads?r.avg.toFixed(2):"–"}</td></tr>`};
   const rows=st.map(row).join(""), thead=`<thead><tr><th>#</th><th class="nm">Player</th><th title="Matches played">Pl</th><th title="Matches won">W</th><th title="Games won minus lost">+/−</th><th title="Average per toad">Avg</th></tr></thead>`;
   // The TV screen shows the table in two halves side by side
   if(tv){const h=Math.ceil(st.length/2);return `<div class="qhead"><h3>Qualifying</h3><span>${played} of ${q.matches.length} played · top ${q.K} go through</span></div>
@@ -797,7 +826,7 @@ function qualiHTML(tv){
   if(!open)return head;
   return `${head}
     <table class="qtab">${thead}<tbody>${rows}</tbody></table>
-    <p class="qnote">Ranked by matches won, then games +/−, then average per toad, then head-to-head.</p>`;
+    <p class="qnote">Ranked by matches won, then games +/−, then average per toad, then head-to-head. An underlined number is what separated two players on the same wins.</p>`;
 }
 
 function bracketHTML(){

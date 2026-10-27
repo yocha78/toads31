@@ -62,6 +62,8 @@ function renderSetup(){
   $("modeSingle").setAttribute("aria-pressed",S.mode==="single");
   $("modeDuo").setAttribute("aria-pressed",D);
   $("modeTour").setAttribute("aria-pressed",T);
+  $("modePractice").setAttribute("aria-pressed",!T);
+  $("practiceRow").hidden=T;
   $("modeHint").textContent=T
     ?tourHint(n)
     :D?"Teams of two share one score from 31. Team-mates take it in turns: each time it's the team's go, the other partner throws."
@@ -1195,14 +1197,16 @@ function undo(){
 }
 
 /* ---------- wiring ---------- */
-$("modeSingle").addEventListener("click",()=>{S.mode="single";render()});
+// Practice is Single or Duo (whichever was used last, Single at first)
+$("modePractice").addEventListener("click",()=>{if(S.mode==="tournament")S.mode=S.practice==="duo"?"duo":"single";if(S.mode==="duo"&&!S.teams.length&&S.players.length>=2)addTeam();else render()});
+$("modeSingle").addEventListener("click",()=>{S.mode=S.practice="single";render()});
 $("modeTour").addEventListener("click",()=>{S.mode="tournament";render();if(NET.on)loadLiveList()});
 $("fmtQuali").addEventListener("click",()=>{S.tourFormat="quali";render()});
 $("fmtByes").addEventListener("click",()=>{S.tourFormat="byes";render()});
 $("meSel").addEventListener("change",()=>{if(S.live){S.live.me=$("meSel").value||null;S.live.meCalled=undefined;save();render()}});
 $("soundOn").addEventListener("change",()=>{try{localStorage.setItem("toads31.sound",$("soundOn").checked?"on":"off")}catch(e){}if($("soundOn").checked)croak()});
 $("perSel").addEventListener("change",()=>{S.qualiPer=+$("perSel").value;save();render()});
-$("modeDuo").addEventListener("click",()=>{S.mode="duo";if(!S.teams.length&&S.players.length>=2)addTeam();else render()});
+$("modeDuo").addEventListener("click",()=>{S.mode=S.practice="duo";if(!S.teams.length&&S.players.length>=2)addTeam();else render()});
 $("addTeamBtn").addEventListener("click",addTeam);
 $("teamList").addEventListener("input",e=>{const t=e.target.closest("input.tname");if(t){S.teams[+t.dataset.t].name=t.value;save();setupStart()}});
 $("teamList").addEventListener("change",e=>{const sel=e.target.closest("select[data-slot]");if(sel){S.teams[+sel.dataset.t][sel.dataset.slot]=sel.value||null;render()}});

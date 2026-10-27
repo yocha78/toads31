@@ -84,6 +84,10 @@
       <button type="button" id="modeSingle" aria-pressed="true">Single</button>
       <button type="button" id="modeDuo" aria-pressed="false">Duo</button>
     </div>
+    <div class="livenow" id="liveNow" hidden>
+      <h2>Live now</h2>
+      <ul id="liveList"></ul>
+    </div>
     <p class="hint" id="modeHint"></p>
     <div class="seg seg2" id="formatRow" role="group" aria-label="Tournament format" hidden>
       <button type="button" id="fmtQuali" aria-pressed="true">Qualifying round</button>
@@ -107,8 +111,6 @@
       <select id="venueSelect"></select>
     </div>
     <div class="livebox" id="liveBox" hidden>
-      <h2 id="liveListHead">Live tournaments</h2>
-      <ul class="players" id="liveList"></ul>
       <div id="liveCreate" hidden>
         <label class="check"><input type="checkbox" id="liveOn"> Run it live: everyone follows it on their phones, and each table scores itself</label>
         <div class="livefields" id="liveFields" hidden>
@@ -358,7 +360,7 @@
     <button class="ghost" id="undoWinBtn">Undo winning throw</button>
   </section>
   <p class="hint" id="syncNote" style="text-align:center" aria-live="polite" hidden></p>
-  <p class="hint" style="text-align:center">Version 27 Oct 2026 · Practice and Tournament tabs</p>
+  <p class="hint" style="text-align:center">Version 27 Oct 2026 · Live now on the Tournament tab</p>
 </div>
 
 <!-- TV SCREEN (#tv-<code>): one tournament for a big screen in the pub -->

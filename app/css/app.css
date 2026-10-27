@@ -412,3 +412,10 @@ body.tvmode{background:#141a18;color:var(--chalk);overflow:hidden}
 .seg.toggle{width:min(100%,260px);margin:10px auto 0;padding:3px}
 .seg.toggle button{padding:7px 10px;font-size:.92rem}
 .seg.toggle button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:inset 0 0 0 2px var(--brass)}
+/* Live now: running tournaments at the top of the Tournament tab */
+.livenow{margin-top:12px}
+.livenow h2{margin:0 0 6px}
+.livenow ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.livenow li button{width:100%;display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;padding:12px 44px 12px 14px;border:2px solid var(--brass);border-radius:12px;background:var(--surface);color:var(--ink);position:relative}
+.livenow li button::after{content:"›";position:absolute;right:16px;top:50%;transform:translateY(-50%);font-size:1.6rem;color:var(--brass)}
+.livenow .nm{font-weight:700;font-size:1.05rem}

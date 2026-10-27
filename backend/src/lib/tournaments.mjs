@@ -12,7 +12,7 @@ import { cleanName, nameKey } from "./http.mjs";
 import { saveGame, deleteGame, deleteGames } from "./games.mjs";
 
 const CODE = /^[A-Z0-9]{6}$/, CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // no 0/O, 1/I/L
-const MAX_PLAYERS = 32, MAX_TABLES = 8, LIST_DAYS = 3;
+const MAX_PLAYERS = 32, MAX_TABLES = 8;
 const key = id => ({ PK: `TOURN#${id}`, SK: "META" });
 const sha = s => createHash("sha256").update(s).digest("hex");
 const same = (a, b) => timingSafeEqual(Buffer.from(sha(String(a))), Buffer.from(sha(String(b))));
@@ -83,14 +83,16 @@ export async function getTournament(db, table, id, since) {
   return publicView(item);
 }
 
-// Tournaments created in the last few days, newest first
-export async function listTournaments(db, table, now = new Date()) {
-  const from = new Date(now - LIST_DAYS * 864e5).toISOString();
+// Tournaments still running (not ended by the organiser), newest first, however old
+export async function listTournaments(db, table) {
   const r = await db.send(new QueryCommand({
     TableName: table, KeyConditionExpression: "PK = :pk AND SK >= :from",
-    ExpressionAttributeValues: { ":pk": "TOURNS", ":from": `T#${from}` }, ScanIndexForward: false, Limit: 20,
+    ExpressionAttributeValues: { ":pk": "TOURNS", ":from": "T#" }, ScanIndexForward: false, Limit: 100,
   }));
-  return (r.Items || []).map(({ id, name, venue, created }) => ({ id, name, venue: venue || null, created }));
+  const items = await Promise.all((r.Items || []).map(i => load(db, table, i.id)));
+  return items.filter(item => item && item.status === "live").slice(0, 20).map(item => ({
+    id: item.id, name: item.name, venue: item.venue || null, created: item.created, champion: JSON.parse(item.state).champion || null,
+  }));
 }
 
 // Organiser's list: every tournament, newest first, with how far it got

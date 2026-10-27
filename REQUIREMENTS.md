@@ -66,6 +66,8 @@ A static app in `app/` with no back end: `index.html`, `css/app.css`, `js/rules.
 
 ### 3.1 Modes (switch on the start screen)
 
+Since 27 Oct 2026 the start screen has two tabs, **Practice** and **Tournament**. Practice holds a small **Single | Duo** toggle (Single at first; afterwards the one used last).
+
 #### Single game
 - One or more players, all in one game, in the order chosen on the throwing-order screen.
 - Player names must be unique.

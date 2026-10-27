@@ -76,10 +76,13 @@
 
   <!-- SETUP -->
   <section id="setup" class="panel">
-    <div class="seg" role="group" aria-label="Game type">
-      <button type="button" id="modeSingle" aria-pressed="true">Single game</button>
-      <button type="button" id="modeDuo" aria-pressed="false">Duo</button>
+    <div class="seg seg2 tabs" role="group" aria-label="Game type">
+      <button type="button" id="modePractice" aria-pressed="true">Practice</button>
       <button type="button" id="modeTour" aria-pressed="false">Tournament</button>
+    </div>
+    <div class="seg seg2 toggle" id="practiceRow" role="group" aria-label="Single or Duo">
+      <button type="button" id="modeSingle" aria-pressed="true">Single</button>
+      <button type="button" id="modeDuo" aria-pressed="false">Duo</button>
     </div>
     <p class="hint" id="modeHint"></p>
     <div class="seg seg2" id="formatRow" role="group" aria-label="Tournament format" hidden>
@@ -355,7 +358,7 @@
     <button class="ghost" id="undoWinBtn">Undo winning throw</button>
   </section>
   <p class="hint" id="syncNote" style="text-align:center" aria-live="polite" hidden></p>
-  <p class="hint" style="text-align:center">Version 27 Oct 2026 · Tap the toad table to go home</p>
+  <p class="hint" style="text-align:center">Version 27 Oct 2026 · Practice and Tournament tabs</p>
 </div>
 
 <!-- TV SCREEN (#tv-<code>): one tournament for a big screen in the pub -->

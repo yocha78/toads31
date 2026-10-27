@@ -67,6 +67,7 @@ A static app in `app/` with no back end: `index.html`, `css/app.css`, `js/rules.
 ### 3.1 Modes (switch on the start screen)
 
 Since 27 Oct 2026 the start screen has two tabs, **Practice** and **Tournament**. Practice holds a small **Single | Duo** toggle (Single at first; afterwards the one used last).
+Online, the Tournament tab opens with **Live now**: every tournament that is still running (not ended by the organiser), however old, each a single tap to follow its tables and bracket. Ended tournaments drop off the list. Organiser changes (edit, restart, end, delete) stay in Menu → Tournaments. (`GET /tournaments` used to list only tournaments created in the last 3 days.)
 
 #### Single game
 - One or more players, all in one game, in the order chosen on the throwing-order screen.

@@ -145,7 +145,7 @@ test("tournaments: only the organiser creates one, and bad details are refused",
   assert.equal(got.body.tournament.name, "Friday cup");
   assert.deepEqual((await call(h, "GET /tournaments/{id}", { id: t.id, query: { since: String(t.ver) } })).body, { same: true, ver: t.ver });
   assert.equal((await call(h, "GET /tournaments/{id}", { id: "NOPE00" })).status, 404);
-  assert.deepEqual((await call(h, "GET /tournaments")).body.tournaments.map(x => x.name), ["Friday cup"]);
+  assert.deepEqual((await call(h, "GET /tournaments")).body.tournaments.map(x => [x.name, x.champion]), [["Friday cup", null]]);
 });
 
 test("tournaments: a table is claimed with the PIN, and only that phone scores it", async () => {
@@ -221,6 +221,7 @@ test("tournaments: two tables score at once, games reach the players' stats, an 
   const shut = await call(h, "POST /tournaments/{id}/tables/{n}/play", { id: t.id, n: 0, body: { token: tok[0], op: { ...w } } });
   assert.equal(shut.status, 409);
   assert.equal((await call(h, "GET /tournaments/{id}", { id: t.id })).body.tournament.status, "ended");
+  assert.deepEqual((await call(h, "GET /tournaments")).body.tournaments, [], "an ended tournament leaves the Live now list");
   assert.equal((await call(h, "DELETE /tournaments/{id}", { id: t.id, token: await orgToken(h) })).status, 200);
   assert.equal((await call(h, "GET /tournaments/{id}", { id: t.id })).status, 404);
   assert.deepEqual((await call(h, "GET /tournaments")).body.tournaments, []);

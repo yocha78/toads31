@@ -91,9 +91,10 @@ function renderSetup(){
 // Tournament mode, online: tournaments to follow, and (organiser) the option to run this one live
 function renderLiveSetup(){
   const T=S.mode==="tournament", org=!!ToadsApi.organiser(), list=NET.liveList||[];
-  $("liveBox").hidden=!T&&!list.length&&!NET.liveMsg;
-  $("liveList").innerHTML=list.map(t=>`<li><span class="pname">${esc(t.name)}${t.venue?` <span class="hint">· ${esc(t.venue)}</span>`:""}</span><button class="x" data-follow="${esc(t.id)}">Follow</button></li>`).join("");
-  $("liveListHead").hidden=!list.length;
+  $("liveBox").hidden=!T&&!NET.liveMsg;
+  // Live now: the running tournaments, one tap to open (organiser changes stay in the Menu)
+  $("liveNow").hidden=!T||!list.length;
+  $("liveList").innerHTML=list.map(t=>`<li><button type="button" data-follow="${esc(t.id)}"><span class="nm">${esc(t.name)}</span><span class="hint">${[t.venue&&esc(t.venue),t.champion&&`Champion: ${esc(t.champion)}`].filter(Boolean).join(" · ")||"Tap to follow the tables and the bracket"}</span></button></li>`).join("");
   $("liveCreate").hidden=!T||!org;
   $("liveOn").checked=!!S.liveOn;
   $("liveFields").hidden=!S.liveOn;

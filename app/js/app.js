@@ -1376,6 +1376,18 @@ $("undoBtn").addEventListener("click",()=>{closeFinish();undo()});
 $("undoWinBtn").addEventListener("click",undoWin);
 // In a tournament, leaving a game keeps it on its table to carry on later
 $("quitBtn").addEventListener("click",()=>{if(M())goHub();else $("quitConfirm").hidden=false});
+// The toad table and title in the header take you home from anywhere: the tournament screen
+// during a tournament, otherwise the start screen. A game still being played asks first.
+function goHome(){
+  if(TV)return;
+  if(S.stage==="game"&&G()&&!G().done&&!M()){$("quitConfirm").hidden=false;$("quitConfirm").scrollIntoView({block:"center",behavior:"smooth"});return}
+  if(isTour())goHub();else{S.focus=null;S.ord=null;S.stage="setup";render()}
+  window.scrollTo(0,0);
+}
+for(const id of["homeLogo","homeTitle"]){
+  $(id).addEventListener("click",goHome);
+  $(id).addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();goHome()}});
+}
 $("quitNo").addEventListener("click",()=>{$("quitConfirm").hidden=true});
 $("quitYes").addEventListener("click",()=>{$("quitConfirm").hidden=true;S.stage="setup";render()});
 

@@ -404,3 +404,6 @@ body.tvmode{background:#141a18;color:var(--chalk);overflow:hidden}
 .qtab .wd{font-size:.75em;opacity:.7}
 .tedit .row{display:flex;gap:6px;align-items:center}
 .tedit .row select{flex:1;min-width:0}
+/* the toad table and title go home */
+#homeLogo,#homeTitle{cursor:pointer;-webkit-tap-highlight-color:transparent}
+#homeLogo:active,#homeTitle:active{transform:scale(.96)}

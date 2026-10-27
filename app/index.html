@@ -42,7 +42,7 @@
 <body>
 <div class="wrap" id="app">
   <header class="brand">
-    <svg class="logo" viewBox="0 0 80 100" role="img" aria-label="Toad in the hole table">
+    <svg class="logo" id="homeLogo" viewBox="0 0 80 100" role="button" tabindex="0" aria-label="Toads 31: back to the main screen">
       <!-- backboard -->
       <rect x="17" y="3" width="46" height="30" rx="6" fill="var(--wood)"/>
       <path d="M21 9h38M21 15h38M21 21h38" stroke="var(--wood-dark)" stroke-width=".6" opacity=".35"/>
@@ -68,7 +68,7 @@
       </g>
     </svg>
     <div>
-      <h1>Toads <span>31</span></h1>
+      <h1 id="homeTitle">Toads <span>31</span></h1>
       <p class="sub">Count down from 31. 2 in the hole, 1 on the table. Finish exactly.</p>
     </div>
     <button type="button" class="menubtn" id="menuBtn" aria-label="Menu" hidden><svg viewBox="0 0 20 16" aria-hidden="true"><path d="M1 2h18M1 8h18M1 14h18"/></svg><span>Menu</span></button>
@@ -355,7 +355,7 @@
     <button class="ghost" id="undoWinBtn">Undo winning throw</button>
   </section>
   <p class="hint" id="syncNote" style="text-align:center" aria-live="polite" hidden></p>
-  <p class="hint" style="text-align:center">Version 27 Oct 2026 · Toad tab icon</p>
+  <p class="hint" style="text-align:center">Version 27 Oct 2026 · Tap the toad table to go home</p>
 </div>
 
 <!-- TV SCREEN (#tv-<code>): one tournament for a big screen in the pub -->

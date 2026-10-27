@@ -45,9 +45,15 @@ function render(){
   $("tvView").hidden=!TV;$("app").hidden=!!TV;
   document.body.classList.toggle("tvmode",!!TV);
   if(TV){renderTV();return}
-  for(const id of["setup","orderView","bracketView","game","win","playersView","statsView","menuView","toursView"])$(id).hidden=true;
-  const views={setup:["setup",renderSetup],menu:["menuView",renderMenu],tours:["toursView",renderTours],players:["playersView",renderPlayers],stats:["statsView",renderStats],order:["orderView",renderOrder],bracket:["bracketView",renderHub],game:["game",renderGame],win:["win",renderWin]};
-  $("menuBtn").hidden=!NET.on||["menu","players","stats","tours"].includes(S.stage);
+  for(const id of["setup","orderView","bracketView","game","win","playersView","statsView","menuView","toursView","venuesView"])$(id).hidden=true;
+  const views={setup:["setup",renderSetup],menu:["menuView",renderMenu],tours:["toursView",renderTours],players:["playersView",renderPlayers],stats:["statsView",renderStats],venues:["venuesView",renderVenues],order:["orderView",renderOrder],bracket:["bracketView",renderHub],game:["game",renderGame],win:["win",renderWin]};
+  $("menuBtn").hidden=!NET.on||MENU_STAGES.includes(S.stage);
+  // Logged in as organiser: the Menu button says so, and organiser-only buttons carry the same key
+  const orgOn=NET.on&&!!ToadsApi.organiser();
+  $("menuBtn").classList.toggle("org",orgOn);$("menuBtn").setAttribute("aria-label",orgOn?"Menu (logged in as organiser)":"Menu");
+  document.body.classList.toggle("isorg",orgOn);
+  // Manage screens only make sense while logged in
+  if(!orgOn&&(S.stage==="venues"||S.manage)){S.manage=false;if(S.stage==="venues")S.stage="menu"}
   if(S.live&&["game","win","order"].includes(S.stage)&&(!M()||!scoring()&&(S.stage!=="game"||!G()||G().done))){S.focus=null;S.ord=null;S.stage="bracket"}
   const v=views[S.stage];
   if(!v){S.stage="setup";return render()}
@@ -98,7 +104,8 @@ function renderLiveSetup(){
   $("liveCreate").hidden=!T||!org;
   $("liveOn").checked=!!S.liveOn;
   $("liveFields").hidden=!S.liveOn;
-  $("liveHint").textContent=!T?"":!org?"To run a live tournament that everyone follows and scores from their own phones, log in as organiser in the Menu (top right)."
+  $("liveOrgLink").hidden=!T||org;
+  $("liveHint").textContent=!T?"":!org?"The organiser can run a tournament live, so everyone follows it and each table scores from its own phone."
     :S.liveOn?"Each table is scored from a phone at the table, after entering the PIN. Share the PIN only with the scorers.":"";
   $("liveHint").hidden=!$("liveHint").textContent;
   $("liveMsg").textContent=NET.liveMsg||"";
@@ -161,7 +168,7 @@ const regBtn=(p,i)=>NET.on&&!findIn(NET.players,p)?`<button class="x reg" data-r
 async function loadDirectory(){
   const [pl,vn]=await Promise.all([ToadsApi.list("players"),ToadsApi.list("venues")]);
   NET.players=pl.items;NET.venues=vn.items;NET.fresh=pl.fresh&&vn.fresh;
-  if(["setup","players","stats"].includes(S.stage))render();
+  if(["setup","players","stats","venues"].includes(S.stage))render();
 }
 function renderOnline(){
   $("venueBox").hidden=false;
@@ -217,20 +224,29 @@ const fmtAvg=a=>a==null?"–":a.toFixed(2);
 function renderPlayers(){
   const list=NET.players.slice().sort(byName);
   $("dirList").innerHTML=list.map(p=>`<button type="button" data-stats="${esc(p.id)}">${esc(p.name)}</button>`).join("");
-  $("playersHint").textContent=list.length?"Tap a player to see their stats."+(NET.fresh?"":" (Offline: last saved list.)")
+  $("playersTitle").textContent=S.manage?"Manage players":"Players";
+  $("playersHint").textContent=list.length?(S.manage?"Tap a player to rename, merge or delete them, or delete some of their games.":"Tap a player to see their stats.")+(NET.fresh?"":" (Offline: last saved list.)")
     :NET.fresh?"No registered players yet. Register players from the setup screen.":"Can't reach the players list right now.";
 }
 // The menu (top right): players & stats, tournaments, and the organiser's login and tidy-up
+const MENU_STAGES=["menu","players","stats","tours","venues"];
 function renderMenu(){
   const org=ToadsApi.organiser();
-  $("orgLogin").hidden=!!org;$("orgOn").hidden=!org;
-  if(org)$("venueAdmin").innerHTML=NET.venues.slice().sort(byName).map(v=>`<li data-venue="${esc(v.id)}">
-    <input type="text" value="${esc(v.name)}" maxlength="60" aria-label="Venue name"><button class="x" data-vsave>Save</button><button class="x" data-vdel>${NET.armed==="venue:"+v.id?"Tap again to delete":"Delete"}</button></li>`).join("")||`<li class="hint">No venues yet.</li>`;
+  $("orgOff").hidden=!!org;$("orgOn").hidden=!org;
+  $("orgLogin").hidden=!NET.orgForm;$("orgOpen").hidden=!!NET.orgForm;
   $("wipeYes").disabled=$("wipeInput").value.trim()!=="DELETE";
   $("soundOn").checked=soundOn();
+  $("aboutVer").textContent=$("verLine").textContent;
 }
+// Manage venues (organiser): add, rename, delete
+function renderVenues(){
+  $("venueAdmin").innerHTML=NET.venues.slice().sort(byName).map(v=>`<li data-venue="${esc(v.id)}">
+    <input type="text" value="${esc(v.name)}" maxlength="60" aria-label="Venue name"><button class="x" data-vsave>Save</button><button class="x" data-vdel>${NET.armed==="venue:"+v.id?"Tap again to delete":"Delete"}</button></li>`).join("")||`<li class="hint">No venues yet.</li>`;
+}
+// Open the Menu at the organiser login (from the Tournament tab)
+function openOrgLogin(){NET.orgForm=true;openMenu();$("orgBox").scrollIntoView({block:"start"});$("orgPassword").focus()}
 function openMenu(){
-  if(!["menu","players","stats","tours"].includes(S.stage))S.menuFrom=S.stage;
+  if(!MENU_STAGES.includes(S.stage))S.menuFrom=S.stage;
   S.stage="menu";$("wipeConfirm").hidden=true;render();loadDirectory();window.scrollTo(0,0);
 }
 // Back from the menu to whatever was on screen, if it still makes sense
@@ -250,14 +266,15 @@ async function loadTours(){
   NET.toursOffline=!!r.offline;
   if(S.stage==="tours")render();
 }
-function openTours(){S.stage="tours";NET.tours=NET.tours||null;NET.tourAct=null;NET.toursMsg="";render();loadTours();window.scrollTo(0,0)}
+function openTours(manage){S.manage=!!manage;S.stage="tours";NET.tours=NET.tours||null;NET.tourAct=null;NET.toursMsg="";render();loadTours();window.scrollTo(0,0)}
 const tvUrl=id=>location.origin+location.pathname+"#tv-"+id;
 const statusText=t=>t.status==="ended"?"Ended":t.champion?`Won by ${t.champion}`:"Live";
 function renderTours(){
-  const org=!!ToadsApi.organiser(), list=NET.tours, a=NET.tourAct||{};
+  const org=S.manage&&!!ToadsApi.organiser(), list=NET.tours, a=NET.tourAct||{};
+  $("toursTitle").textContent=org?"Manage tournaments":"Tournaments";
   $("toursHint").textContent=!list?(NET.toursOffline?"No signal, so the tournaments can't be listed. Try again in a moment.":"Loading…")
-    :!list.length?"No live tournaments yet. Start one from the Tournament tab on the setup screen (organiser).":
-    org?"Open one to follow it, put it on a TV screen, or edit, restart or delete it.":"Open one to follow it, or put it on a TV screen. Log in as organiser in the Menu to edit, restart or delete one.";
+    :!list.length?"No tournaments yet."+(org?" Start one from the Tournament tab on the start screen.":""):
+    org?"Edit, restart, end or delete a tournament. To start a new one, use the Tournament tab on the start screen.":"Open one to follow it, or put it on a TV screen.";
   $("toursMsg").textContent=NET.toursMsg||"";
   $("toursMsg").className="msg"+(/^(Can't|No signal|That)/.test(NET.toursMsg||"")?" bad":NET.toursMsg?" good":"");
   $("toursList").innerHTML=(list||[]).map(t=>{
@@ -433,8 +450,9 @@ function fitTV(){
 }
 
 function renderStats(){
-  const org=ToadsApi.organiser(), key=S.statsId+"|"+(S.statsVenue||""), d=NET.statsKey===key?NET.stats:null, known=NET.players.find(p=>p.id===S.statsId);
+  const org=S.manage&&ToadsApi.organiser(), key=S.statsId+"|"+(S.statsVenue||""), d=NET.statsKey===key?NET.stats:null, known=NET.players.find(p=>p.id===S.statsId);
   if(NET.statsKey!==key)loadStats(key);
+  $("statsTitle").textContent=org?"Manage player":"Player stats";
   $("statsName").textContent=d&&d.player?d.player.name:known?known.name:"";
   const bad=d&&(d.offline||d.error);
   $("statsMsg").textContent=!d?"Loading…":d.offline?"Can't reach the stats right now. Try again when there's signal.":d.error?(d.status===404?"This player is no longer on the list.":d.error):NET.statsNote||"";
@@ -459,7 +477,7 @@ function renderStats(){
       ${d.headToHead.length?`<h2>Head to head</h2><table class="st"><tr><th>Against</th><th class="n">Played</th><th class="n">Won</th><th class="n">Lost</th></tr>
       ${d.headToHead.map(o=>`<tr><td>${esc(o.name)}${o.playerId?"":' <span class="tag">guest</span>'}</td><td class="n">${o.played}</td><td class="n">${o.won}</td><td class="n">${o.lost}</td></tr>`).join("")}</table>`:""}
       <h2>${NET.allGames?"All games":"Latest games"}</h2><table class="st"><tr><th>Date</th><th>Pub</th><th>Result</th><th class="n">Avg</th>${org?"<th></th>":""}</tr>
-      ${d.recent.slice(0,NET.allGames?undefined:10).map(g=>`<tr><td>${fmtDate(g.finished)}</td><td>${esc(g.venue||"–")}${g.tournament?` <span class="hint">· ${esc(g.tournament)}</span>`:""}</td><td class="${g.won?"res-w":"res-l"}">${g.won?"Won":g.winner?esc(g.winner)+" won":"Lost"}${g.sides>1?"":" (solo)"}</td><td class="n">${fmtAvg(g.avg)}</td>${org?`<td class="n"><button type="button" class="x" data-delgame="${esc(g.gameId)}">${NET.armed==="game:"+g.gameId?"Tap again":"Delete"}</button></td>`:""}</tr>`).join("")}</table>
+      ${d.recent.slice(0,NET.allGames?undefined:10).map(g=>`<tr><td>${fmtDate(g.finished)}</td><td>${esc(g.venue||"–")}${g.tournament?` <span class="hint">· ${esc(g.tournament)}</span>`:""}</td><td class="${g.won?"res-w":"res-l"}">${g.won?"Won":g.winner?esc(g.winner)+" won":"Lost"}${g.sides>1?"":" (solo)"}</td><td class="n">${fmtAvg(g.avg)}</td>${org?`<td class="n"><button type="button" class="x orgonly" data-delgame="${esc(g.gameId)}">${NET.armed==="game:"+g.gameId?"Tap again":"Delete"}</button></td>`:""}</tr>`).join("")}</table>
       ${(d.count||d.recent.length)>10?`<button type="button" class="ghost" id="allGamesBtn">${NET.allGames?"Show the latest 10":`Show all ${d.count||d.recent.length} games`}</button>`:""}
       ${org?`<p class="hint">Deleting a game takes it out of the stats of everyone who played in it.</p>`:""}`;
   }
@@ -772,7 +790,7 @@ function liveCard(k,x){
   }else{
     if(x&&g)main=`<button data-ri="${x.ri}" data-mi="${x.mi}">Watch</button>`;
     else if(!other&&!ended)main=`<button class="primary" data-claim="${k}">Score this table</button>`;
-    if(other)extra=`<span>Scored on another phone</span>${ended?"":`<button type="button" class="link" data-takeover="${k}">Take over</button>`}${ToadsApi.organiser()?`<button type="button" class="link" data-release="${k}">Release</button>`:""}`;
+    if(other)extra=`<span>Scored on another phone</span>${ended?"":`<button type="button" class="link" data-takeover="${k}">Take over</button>`}${ToadsApi.organiser()?`<button type="button" class="link orgonly" data-release="${k}">Release</button>`:""}`;
     else if(x&&g&&!ended)extra=`<span>Nobody is scoring it</span><button type="button" class="link" data-claim="${k}">Score this table</button>`;
   }
   return {main,extra:extra?`<div class="tclaim">${extra}</div>`:""};
@@ -1234,10 +1252,17 @@ if(NET.on){
   $("venueSelect").addEventListener("change",()=>{S.venue=$("venueSelect").value;save()});
   $("menuBtn").addEventListener("click",openMenu);
   $("menuBack").addEventListener("click",closeMenu);
-  $("menuPlayers").addEventListener("click",()=>{S.stage="players";render();loadDirectory();window.scrollTo(0,0)});
-  $("menuTours").addEventListener("click",openTours);
-  $("playersBack").addEventListener("click",()=>{S.stage="menu";render()});
-  $("toursBack").addEventListener("click",()=>{S.stage="menu";render()});
+  const openPlayers=manage=>{S.manage=manage;S.stage="players";$("playersMsg").textContent="";render();loadDirectory();window.scrollTo(0,0)};
+  $("menuPlayers").addEventListener("click",()=>openPlayers(false));
+  $("menuTours").addEventListener("click",()=>openTours(false));
+  $("menuManagePlayers").addEventListener("click",()=>openPlayers(true));
+  $("menuManageTours").addEventListener("click",()=>openTours(true));
+  $("menuManageVenues").addEventListener("click",()=>{S.stage="venues";NET.armed=null;$("venueMsg").textContent="";render();loadDirectory();window.scrollTo(0,0)});
+  $("venuesBack").addEventListener("click",()=>{S.stage="menu";render()});
+  $("orgOpen").addEventListener("click",()=>{NET.orgForm=true;render();$("orgPassword").focus()});
+  $("liveOrgLink").addEventListener("click",openOrgLogin);
+  $("playersBack").addEventListener("click",()=>{S.manage=false;S.stage="menu";render()});
+  $("toursBack").addEventListener("click",()=>{S.manage=false;S.stage="menu";render()});
   $("toursList").addEventListener("click",e=>{
     const card=e.target.closest("[data-tour]");if(!card)return;
     const id=card.dataset.tour, act=e.target.closest("[data-act]"), yes=e.target.closest("[data-yes]");
@@ -1295,29 +1320,29 @@ if(NET.on){
     const r=await ToadsApi.login(pw);
     $("orgMsg").textContent=r.ok?"Logged in.":r.offline?"No signal. Try again in a moment.":r.error==="wrong password"?"Wrong password.":`Can't log in: ${r.error}.`;
     $("orgMsg").className="msg "+(r.ok?"good":"bad");
-    if(r.ok)$("orgPassword").value="";
+    if(r.ok){$("orgPassword").value="";NET.orgForm=false}
     render();
   });
-  $("orgLogout").addEventListener("click",()=>{ToadsApi.logout();$("orgMsg").textContent="Logged out.";$("orgMsg").className="msg";render()});
+  $("orgLogout").addEventListener("click",()=>{ToadsApi.logout();NET.orgForm=false;$("orgMsg").textContent="Logged out.";$("orgMsg").className="msg";render()});
   $("venueAddForm").addEventListener("submit",async e=>{
     e.preventDefault();
     const name=$("venueAddName").value.replace(/\s+/g," ").trim();if(!name)return;
     const r=await ToadsApi.add("venues",{name});
-    if(r.item&&r.created){$("venueAddName").value="";$("orgMsg").textContent=`Added ${r.item.name}.`;$("orgMsg").className="msg good";await loadDirectory()}
-    else{$("orgMsg").textContent=r.item?`${r.item.name} is already on the list.`:failMsg(r,"add it");$("orgMsg").className="msg bad";render()}
+    if(r.item&&r.created){$("venueAddName").value="";$("venueMsg").textContent=`Added ${r.item.name}.`;$("venueMsg").className="msg good";await loadDirectory()}
+    else{$("venueMsg").textContent=r.item?`${r.item.name} is already on the list.`:failMsg(r,"add it");$("venueMsg").className="msg bad";render()}
   });
   $("venueAdmin").addEventListener("click",async e=>{
     const li=e.target.closest("li[data-venue]");if(!li)return;
     const id=li.dataset.venue, v=NET.venues.find(x=>x.id===id);if(!v)return;
     if(e.target.closest("[data-vsave]")){
       const r=await ToadsApi.tidy("PATCH","venues",id,{name:li.querySelector("input").value});
-      if(tidyResult(r,`Saved ${r.item&&r.item.name}.`,"orgMsg")){if(S.venue===v.name)S.venue=r.item.name;await loadDirectory()}
+      if(tidyResult(r,`Saved ${r.item&&r.item.name}.`,"venueMsg")){if(S.venue===v.name)S.venue=r.item.name;await loadDirectory()}
     }
     if(e.target.closest("[data-vdel]")){
       if(NET.armed!=="venue:"+id){NET.armed="venue:"+id;render();return}
       NET.armed=null;
       const r=await ToadsApi.tidy("DELETE","venues",id);
-      if(tidyResult(r,`Deleted ${v.name}.`,"orgMsg"))await loadDirectory();else render();
+      if(tidyResult(r,`Deleted ${v.name}.`,"venueMsg"))await loadDirectory();else render();
     }
   });
   $("renameForm").addEventListener("submit",async e=>{
@@ -1336,7 +1361,7 @@ if(NET.on){
     const d=NET.stats,p=d&&d.player;if(!p)return;
     confirmStats(`Delete ${p.name} and their stats? Saved games keep the name, like a guest's. This can't be undone.`,async()=>{
       const r=await ToadsApi.tidy("DELETE","players",p.id);
-      if(tidyResult(r,"","statsMsg")){await loadDirectory();S.stage="players";$("orgMsg").textContent=`Deleted ${p.name}.`;$("orgMsg").className="msg good";render()}
+      if(tidyResult(r,"","statsMsg")){await loadDirectory();S.stage="players";$("playersMsg").textContent=`Deleted ${p.name}.`;$("playersMsg").className="msg good";render()}
     });
   });
   $("liveList").addEventListener("click",e=>{const b=e.target.closest("button[data-follow]");if(b)follow(b.dataset.follow)});
@@ -1413,7 +1438,7 @@ if(S.mode==="tournament"||S.live){
 }
 if(["game","win"].includes(S.stage)&&!G())S.stage="setup";
 if(S.stage==="order"&&!S.ord)S.stage=isTour()?"bracket":"setup";
-if(["players","stats","menu","tours"].includes(S.stage)&&(!NET.on||(S.stage==="stats"&&!S.statsId)))S.stage="setup";
+if(MENU_STAGES.includes(S.stage)&&(!NET.on||(S.stage==="stats"&&!S.statsId)))S.stage="setup";
 if(S.stage==="tours")loadTours();
 render();
 if(NET.on){

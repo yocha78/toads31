@@ -419,3 +419,18 @@ body.tvmode{background:#141a18;color:var(--chalk);overflow:hidden}
 .livenow li button{width:100%;display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;padding:12px 44px 12px 14px;border:2px solid var(--brass);border-radius:12px;background:var(--surface);color:var(--ink);position:relative}
 .livenow li button::after{content:"›";position:absolute;right:16px;top:50%;transform:translateY(-50%);font-size:1.6rem;color:var(--brass)}
 .livenow .nm{font-weight:700;font-size:1.05rem}
+/* Menu: "For everyone", then the organiser's section, then About */
+.menusec{display:flex;align-items:center;gap:6px;margin:4px 0 0;font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+#orgBox{border:2px solid var(--brass);border-radius:14px;padding:12px;margin-top:6px}
+#orgBox > .menusec{color:var(--brass)}
+#orgOff,.orgon{display:flex;flex-direction:column;gap:8px}
+.danger{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line);padding-top:10px}
+.danger .menusec{color:var(--bad)}
+.about{display:flex;flex-direction:column;gap:4px;border-top:1px solid var(--line);padding-top:10px}
+/* The organiser's key: on the Menu section, the Menu button and every organiser-only button */
+.key,.orgonly::before,.menubtn.org::after{content:"";display:inline-block;width:14px;height:14px;flex:none;background:var(--brass);
+  -webkit-mask:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='5' cy='8' r='3.6' fill='none' stroke='black' stroke-width='2.2'/><path d='M8.4 8H15M12.5 8v3M15 8v2.4' fill='none' stroke='black' stroke-width='2.2'/></svg>") center/contain no-repeat;
+  mask:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='5' cy='8' r='3.6' fill='none' stroke='black' stroke-width='2.2'/><path d='M8.4 8H15M12.5 8v3M15 8v2.4' fill='none' stroke='black' stroke-width='2.2'/></svg>") center/contain no-repeat}
+.orgonly::before{margin-right:5px;vertical-align:-2px}
+.menubtn.org{border-color:var(--brass)}
+#liveOrgLink{align-self:flex-start}

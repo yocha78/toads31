@@ -152,10 +152,6 @@
   <section id="menuView" class="panel" hidden>
     <div class="viewhead"><h2>Menu</h2><button class="ghost" id="menuBack">Back</button></div>
     <h3 class="menusec">For everyone</h3>
-    <nav class="menulist">
-      <button type="button" id="menuPlayers"><b>Players &amp; stats</b><span>Each player's games, wins and averages</span></button>
-      <button type="button" id="menuTours"><b>Tournaments</b><span>Follow a tournament or put it on a TV screen</span></button>
-    </nav>
     <details class="howto">
       <summary><b>How to play</b></summary>
       <ul>
@@ -167,6 +163,10 @@
       </ul>
       <p class="hint">Scoring: tap the toad with the points the thrower made. A toad turns brass when that score finishes the game.</p>
     </details>
+    <nav class="menulist">
+      <button type="button" id="menuPlayers"><b>Players &amp; stats</b><span>Each player's games, wins and averages</span></button>
+      <button type="button" id="menuTours"><b>Tournaments</b><span>Follow a tournament or put it on a TV screen</span></button>
+    </nav>
     <label class="check soundsw"><input type="checkbox" id="soundOn"> Croak when someone wins</label>
     <div class="orgbox" id="orgBox">
       <h3 class="menusec"><span class="key" aria-hidden="true"></span>Organiser</h3>
@@ -380,7 +380,7 @@
     <button class="ghost" id="undoWinBtn">Undo winning throw</button>
   </section>
   <p class="hint" id="syncNote" style="text-align:center" aria-live="polite" hidden></p>
-  <p class="hint" id="verLine" style="text-align:center">Version 27 Oct 2026 · A clearer Menu</p>
+  <p class="hint" id="verLine" style="text-align:center">Version 27 Oct 2026 · How to play first in the Menu</p>
 </div>
 
 <!-- TV SCREEN (#tv-<code>): one tournament for a big screen in the pub -->

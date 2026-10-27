@@ -71,7 +71,7 @@
       <h1 id="homeTitle">Toads <span>31</span></h1>
       <p class="sub">Count down from 31. 2 in the hole, 1 on the table. Finish exactly.</p>
     </div>
-    <button type="button" class="menubtn" id="menuBtn" aria-label="Menu" hidden><svg viewBox="0 0 20 16" aria-hidden="true"><path d="M1 2h18M1 8h18M1 14h18"/></svg><span>Menu</span></button>
+    <button type="button" class="menubtn" id="menuBtn" aria-label="Menu" hidden><svg viewBox="0 0 20 16" aria-hidden="true"><path d="M1 2h18M1 8h18M1 14h18"/></svg><span id="menuBtnText">Menu</span></button>
   </header>
 
   <!-- SETUP -->
@@ -112,13 +112,14 @@
     </div>
     <div class="livebox" id="liveBox" hidden>
       <div id="liveCreate" hidden>
-        <label class="check"><input type="checkbox" id="liveOn"> Run it live: everyone follows it on their phones, and each table scores itself</label>
+        <label class="check orgonly"><input type="checkbox" id="liveOn"> Run it live: everyone follows it on their phones, and each table scores itself</label>
         <div class="livefields" id="liveFields" hidden>
           <input type="text" id="liveName" placeholder="Tournament name" maxlength="40" autocomplete="off" aria-label="Tournament name">
           <input type="text" id="livePin" inputmode="numeric" pattern="[0-9]*" placeholder="Scoring PIN (4 to 8 digits)" maxlength="8" autocomplete="off" aria-label="Scoring PIN">
         </div>
       </div>
       <p class="hint" id="liveHint"></p>
+      <button type="button" class="link" id="liveOrgLink" hidden>Log in as organiser</button>
       <p class="msg" id="liveMsg" aria-live="polite"></p>
     </div>
     <h2>Players</h2>
@@ -150,10 +151,7 @@
   <!-- MENU (online only) -->
   <section id="menuView" class="panel" hidden>
     <div class="viewhead"><h2>Menu</h2><button class="ghost" id="menuBack">Back</button></div>
-    <nav class="menulist">
-      <button type="button" id="menuPlayers"><b>Players &amp; stats</b><span>Each player's games, wins and averages</span></button>
-      <button type="button" id="menuTours"><b>Tournaments</b><span>Follow one, put it on a TV screen, or (organiser) edit, restart and delete</span></button>
-    </nav>
+    <h3 class="menusec">For everyone</h3>
     <details class="howto">
       <summary><b>How to play</b></summary>
       <ul>
@@ -165,39 +163,61 @@
       </ul>
       <p class="hint">Scoring: tap the toad with the points the thrower made. A toad turns brass when that score finishes the game.</p>
     </details>
+    <nav class="menulist">
+      <button type="button" id="menuPlayers"><b>Players &amp; stats</b><span>Each player's games, wins and averages</span></button>
+      <button type="button" id="menuTours"><b>Tournaments</b><span>Follow a tournament or put it on a TV screen</span></button>
+    </nav>
     <label class="check soundsw"><input type="checkbox" id="soundOn"> Croak when someone wins</label>
     <div class="orgbox" id="orgBox">
-      <h2>Organiser</h2>
-      <form class="row" id="orgLogin">
-        <input type="password" id="orgPassword" placeholder="Organiser password" autocomplete="current-password" aria-label="Organiser password">
-        <button class="primary" type="submit">Log in</button>
-      </form>
-      <div class="orgon" id="orgOn" hidden>
-        <p class="hint">Logged in as organiser on this phone. Open a player in Players &amp; stats to rename, merge or delete them, or to delete their games.</p>
-        <h2>Venues</h2>
-        <p class="hint">Only you add venues. Everyone else picks one from this list when they start a game (or leaves it blank).</p>
-        <form class="row" id="venueAddForm">
-          <input type="text" id="venueAddName" placeholder="New venue" maxlength="60" autocomplete="off" aria-label="New venue">
-          <button class="primary" type="submit">Add</button>
+      <h3 class="menusec"><span class="key" aria-hidden="true"></span>Organiser</h3>
+      <div id="orgOff">
+        <p class="hint">Run live tournaments, manage players and venues, and correct results. Needs the organiser password.</p>
+        <button type="button" id="orgOpen">Log in as organiser</button>
+        <form class="row" id="orgLogin" hidden>
+          <input type="password" id="orgPassword" placeholder="Organiser password" autocomplete="current-password" aria-label="Organiser password">
+          <button class="primary" type="submit">Log in</button>
         </form>
-        <ul class="players" id="venueAdmin"></ul>
-        <h2>Saved games</h2>
-        <button class="ghost danger" id="wipeBtn">Delete all saved games</button>
-        <div class="confirm" id="wipeConfirm" hidden>
-          <span>This deletes every saved game and all the players' stats, for everyone. Players, venues and tournaments stay. It can't be undone. Type DELETE to confirm.</span>
-          <input type="text" id="wipeInput" autocomplete="off" aria-label="Type DELETE to confirm">
-          <div class="actions"><button id="wipeNo">Cancel</button><button class="primary" id="wipeYes" disabled>Delete all games</button></div>
+      </div>
+      <div class="orgon" id="orgOn" hidden>
+        <p class="hint">Logged in as organiser on this phone. Buttons with a key are only shown to you.</p>
+        <nav class="menulist">
+          <button type="button" id="menuManageTours"><b>Manage tournaments</b><span>Edit, restart, end or delete a tournament. Start a new one from the Tournament tab.</span></button>
+          <button type="button" id="menuManagePlayers"><b>Manage players</b><span>Rename, merge or delete players, or delete their games</span></button>
+          <button type="button" id="menuManageVenues"><b>Manage venues</b><span>The pubs everyone picks from</span></button>
+        </nav>
+        <button class="ghost" id="orgLogout">Log out of organiser</button>
+        <div class="danger">
+          <h3 class="menusec">Danger zone</h3>
+          <button class="ghost danger" id="wipeBtn">Delete all saved games</button>
+          <div class="confirm" id="wipeConfirm" hidden>
+            <span>This deletes every saved game and all the players' stats, for everyone. Players, venues and tournaments stay. It can't be undone. Type DELETE to confirm.</span>
+            <input type="text" id="wipeInput" autocomplete="off" aria-label="Type DELETE to confirm">
+            <div class="actions"><button id="wipeNo">Cancel</button><button class="primary" id="wipeYes" disabled>Delete all games</button></div>
+          </div>
         </div>
-        <button class="ghost" id="orgLogout">Log out</button>
       </div>
       <p class="msg" id="orgMsg" aria-live="polite"></p>
     </div>
-    <p class="hint">What's saved: player names, pubs, and the scores of finished games. Nothing else about you. The organiser can delete a player and their stats.</p>
+    <div class="about">
+      <h3 class="menusec">About</h3>
+      <p class="hint">What's saved: player names, pubs, and the scores of finished games. Nothing else about you. The organiser can delete a player and their stats.</p>
+      <p class="hint" id="aboutVer"></p>
+    </div>
+  </section>
+  <section id="venuesView" class="panel" hidden>
+    <div class="viewhead"><h2>Manage venues</h2><button class="ghost" id="venuesBack">Menu</button></div>
+    <p class="hint">Only you add venues. Everyone else picks one from this list when they start a game (or leaves it blank).</p>
+    <form class="row" id="venueAddForm">
+      <input type="text" id="venueAddName" placeholder="New venue" maxlength="60" autocomplete="off" aria-label="New venue">
+      <button class="primary" type="submit">Add</button>
+    </form>
+    <p class="msg" id="venueMsg" aria-live="polite"></p>
+    <ul class="players" id="venueAdmin"></ul>
   </section>
 
   <!-- TOURNAMENTS (online only) -->
   <section id="toursView" class="panel" hidden>
-    <div class="viewhead"><h2>Tournaments</h2><button class="ghost" id="toursBack">Back</button></div>
+    <div class="viewhead"><h2 id="toursTitle">Tournaments</h2><button class="ghost" id="toursBack">Menu</button></div>
     <p class="hint" id="toursHint"></p>
     <p class="msg" id="toursMsg" aria-live="polite"></p>
     <div class="tourlist" id="toursList"></div>
@@ -205,20 +225,19 @@
 
   <!-- PLAYERS & STATS (online only) -->
   <section id="playersView" class="panel" hidden>
-    <div class="viewhead"><h2>Players</h2><button class="ghost" id="playersBack">Menu</button></div>
+    <div class="viewhead"><h2 id="playersTitle">Players</h2><button class="ghost" id="playersBack">Menu</button></div>
     <p class="hint" id="playersHint"></p>
+    <p class="msg" id="playersMsg" aria-live="polite"></p>
     <div class="chips" id="dirList"></div>
   </section>
 
   <section id="statsView" class="panel" hidden>
-    <div class="viewhead"><h2>Player stats</h2><button class="ghost" id="statsBack">All players</button></div>
+    <div class="viewhead"><h2 id="statsTitle">Player stats</h2><button class="ghost" id="statsBack">All players</button></div>
     <div class="who" id="statsName"></div>
     <label class="hint" for="statsVenue">Pub</label>
     <select id="statsVenue"></select>
     <p class="msg" id="statsMsg" aria-live="polite"></p>
-    <div id="statsBody"></div>
     <div class="orgbox" id="statsOrg" hidden>
-      <h2>Organiser</h2>
       <form class="row" id="renameForm">
         <input type="text" id="renameInput" maxlength="24" autocomplete="off" aria-label="New name">
         <button type="submit">Rename</button>
@@ -235,6 +254,7 @@
         <div class="actions"><button id="statsConfirmNo">Cancel</button><button class="primary" id="statsConfirmYes">Yes</button></div>
       </div>
     </div>
+    <div id="statsBody"></div>
   </section>
 
   <!-- THROWING ORDER -->
@@ -274,7 +294,7 @@
         <div class="actions">
           <button id="liveShareBtn" aria-controls="shareBox">Share</button>
           <a class="btn" id="liveTv" target="_blank" rel="noopener">TV screen</a>
-          <button class="ghost" id="liveEnd">End tournament</button>
+          <button class="ghost orgonly" id="liveEnd">End tournament</button>
         </div>
         <div class="confirm" id="liveEndConfirm" hidden>
           <span>End the tournament for everyone? Scoring stops, and the results stay visible.</span>
@@ -360,7 +380,7 @@
     <button class="ghost" id="undoWinBtn">Undo winning throw</button>
   </section>
   <p class="hint" id="syncNote" style="text-align:center" aria-live="polite" hidden></p>
-  <p class="hint" style="text-align:center">Version 27 Oct 2026 · Live now on the Tournament tab</p>
+  <p class="hint" id="verLine" style="text-align:center">Version 27 Oct 2026 · How to play first in the Menu</p>
 </div>
 
 <!-- TV SCREEN (#tv-<code>): one tournament for a big screen in the pub -->

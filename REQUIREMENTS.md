@@ -161,6 +161,7 @@ A static app in `app/` with no back end: `index.html`, `css/app.css`, `js/rules.
 - **Header:** logo of a toad table, drawn from a real pub table. It shows a rounded wooden backboard, a grey lead top in perspective with a central hole, a brass toad on the lead, a drawer with a brass cup handle and barley-twist legs. Beside it: "Toads **31**" and the line "Count down from 31. 2 in the hole, 1 on the table. Finish exactly."
 - **Toad icon:** a simple brass frog silhouette. It is used next to scores, on the winner screen and on the champion entry.
 - **Browser tab and home-screen icon (27 Oct 2026):** the same toad in chalk yellow on the slate chalkboard colour, in `app/img/` (SVG, a 32 px PNG and a 180 px Apple touch icon).
+- **Home (27 Oct 2026):** tapping the toad table logo or the "Toads 31" title goes back to the main screen from anywhere: the tournament screen during a tournament, otherwise the start screen. During an unfinished Single or Duo game it first asks "End game?" (Keep playing / End game).
 - **Fonts (Google Fonts):**
   - Alfa Slab One (display).
   - Atkinson Hyperlegible (body).

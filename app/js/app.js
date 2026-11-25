@@ -905,11 +905,11 @@ function liveCard(k,x){
   let main="", extra="";
   if(mine){
     if(x)main=`<button class="${g?"":"primary"}" data-ri="${x.ri}" data-mi="${x.mi}">${g?"Continue":`Start game ${gameNo(x.m)}`}</button>`;
-    extra=`<span>Scored on this phone</span><button type="button" class="link" data-release="${k}">Give up table</button>`;
+    extra=`<span>Scored on this phone</span><button type="button" class="tbtn giveup" data-release="${k}">✋ Give up table</button>`;
   }else{
     if(x&&g)main=`<button data-ri="${x.ri}" data-mi="${x.mi}">Watch</button>`;
     else if(!other&&!ended)main=`<button class="primary" data-claim="${k}">Score this table</button>`;
-    if(other)extra=`<span>Scored on another phone</span>${ended?"":`<button type="button" class="link" data-takeover="${k}">Take over</button>`}${ToadsApi.organiser()?`<button type="button" class="link orgonly" data-release="${k}">Release</button>`:""}`;
+    if(other)extra=`<span>Scored on another phone</span>${ended?"":`<button type="button" class="tbtn takeover" data-takeover="${k}">↻ Take over</button>`}${ToadsApi.organiser()?`<button type="button" class="tbtn giveup orgonly" data-release="${k}">Release</button>`:""}`;
     else if(x&&g&&!ended)extra=`<span>Nobody is scoring it</span><button type="button" class="link" data-claim="${k}">Score this table</button>`;
   }
   return {main,extra:extra?`<div class="tclaim">${extra}</div>`:""};

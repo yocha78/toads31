@@ -302,6 +302,10 @@ table.st td.n,table.st th.n{text-align:right}
 .qr{width:200px;max-width:70vw;background:#fff;border-radius:8px;line-height:0}
 .qr svg{width:100%;height:auto}
 .tclaim{grid-column:1 / -1;display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;font-size:.78rem;color:var(--muted);margin-top:4px}
+.tclaim{font-size:.85rem;gap:8px 12px;justify-content:space-between}
+.tclaim .tbtn{padding:7px 12px;border-radius:999px;font-size:.88rem;font-weight:700;background:var(--surface);min-height:36px}
+.tclaim .tbtn.takeover{border:2px solid var(--brass);color:var(--ink);background:color-mix(in srgb,var(--brass) 16%,var(--surface))}
+.tclaim .tbtn.giveup{border:2px solid var(--bad);color:var(--bad)}
 .tclaim .link{border:0;background:none;padding:2px 0;color:var(--ink);text-decoration:underline;font-size:.78rem}
 
 /* menu (top right) */
@@ -321,7 +325,11 @@ a.btn:focus-visible{outline:3px solid var(--brass);outline-offset:2px}
 .tourcard .tn b{font-family:var(--display);font-weight:400;font-size:1.1rem;overflow-wrap:anywhere;min-width:0}
 .tourcard .ti{color:var(--muted);font-size:.85rem}
 .tourcard .tclaim{margin-top:0;font-size:.9rem}
-.tourcard .tclaim .link{font-size:.9rem;padding:4px 0}
+.tourcard .tclaim{font-size:.85rem;gap:8px 12px;justify-content:space-between}
+.tclaim .tbtn{padding:7px 12px;border-radius:999px;font-size:.88rem;font-weight:700;background:var(--surface);min-height:36px}
+.tclaim .tbtn.takeover{border:2px solid var(--brass);color:var(--ink);background:color-mix(in srgb,var(--brass) 16%,var(--surface))}
+.tclaim .tbtn.giveup{border:2px solid var(--bad);color:var(--bad)}
+.tclaim .link{font-size:.9rem;padding:4px 0}
 .plan{display:flex;flex-direction:column;gap:2px;font-size:.85rem;color:var(--muted);font-variant-numeric:tabular-nums}
 .plan b{color:var(--ink)}
 .touredit{display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--line);padding-top:10px}

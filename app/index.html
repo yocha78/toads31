@@ -377,14 +377,16 @@
         </div>
       </div>
       <div class="cols-wrap chalk"><div id="board"></div></div>
+      <div id="screenArea">
       <button class="ghost" id="screenBtn" hidden>Show on a big screen</button>
       <div class="sharebox screenbox panel" id="screenBox" hidden>
-        <p><b>On the big screen (TV, laptop or tablet), open this link or scan the code.</b> It follows this game's scores as you play, and the next games too.</p>
+        <p><b>On the big screen (TV, laptop or tablet), open this link or scan the code.</b> It follows the scores as you play, this game and the next ones.</p>
         <p class="screencode">Game code <b id="screenCode"></b></p>
         <div class="qr" id="screenQr"></div>
         <div class="row"><input type="text" id="screenLink" readonly aria-label="Big screen link"><button id="screenCopy">Copy link</button></div>
         <p class="hint" id="screenNote"></p>
         <div class="actions"><button id="screenClose">Hide this</button><button class="ghost" id="screenStop">Stop the big screen</button></div>
+      </div>
       </div>
     </div>
   </section>
@@ -404,7 +406,7 @@
     <button class="ghost" id="undoWinBtn">Undo winning throw</button>
   </section>
   <p class="hint" id="syncNote" style="text-align:center" aria-live="polite" hidden></p>
-  <p class="hint" id="verLine" style="text-align:center">Version 25 Nov 2026 · Semi-finals best of 5, final best of 7</p>
+  <p class="hint" id="verLine" style="text-align:center">Version 25 Nov 2026 · Big screen from the throwing order</p>
 </div>
 
 <!-- TV SCREEN (#tv-<code>): one tournament for a big screen in the pub -->

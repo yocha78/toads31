@@ -409,7 +409,7 @@ async function svFetch(){
   const was=V.offline;V.offline=!!r.offline;
   if(r.status===200&&r.data&&r.data.screen){Object.assign(V,{game:r.data.screen.game,ver:r.data.screen.ver,error:null});render();return}
   if(r.status===200&&r.data&&r.data.same){if(was)render();return}
-  if(r.status===404){V.game=null;V.error="Waiting for the game. On the phone, start a game and tap “Show on a big screen”."}
+  if(r.status===404){V.game=null;V.error="Waiting for the game. The scores appear here as soon as it starts on the phone."}
   else if(!V.game)V.error=r.offline?"No signal. Trying again…":"Can't reach the scores right now. Trying again…";
   render();
 }
@@ -959,7 +959,7 @@ function renderOrder(){
     :"Each player throws one toad. Tap the players from closest to the hole to furthest away.";
   $("pickedList").innerHTML=o.pending.map((_,i)=>o.order[i]
     ?`<li><span class="num">${i+1}</span>${esc(o.order[i])}${i===0?' <span class="hint">throws first</span>':""}</li>`
-    :`<li class="slot"><span class="num">${i+1}</span>${i===o.order.length?"Tap the next closest":"&nbsp;"}</li>`).join("");
+    :`<li class="slot"><span class="num">${i+1}</span>${i===o.order.length?"Select closest player below":"&nbsp;"}</li>`).join("");
   $("pickGrid").innerHTML=left.map(p=>`<button data-p="${esc(p)}">${esc(p)}</button>`).join("");
   $("pickGrid").hidden=!left.length;
   $("orderReset").disabled=!o.order.length;
@@ -971,6 +971,7 @@ function renderOrder(){
     $("toWinBtns").innerHTML=[1,2,3,4,5].map(n=>`<button type="button" data-to="${n}" aria-pressed="${n===o.to}"><small>Best of</small>${n*2-1}</button>`).join("");
     $("toWinHint").textContent=o.to===1?"Best of 1: one game decides the match.":`Best of ${o.to*2-1}: first to win ${o.to} games. The order is asked again only for a deciding game.`;
   }
+  renderScreenArea($("orderView"));
 }
 
 function renderHub(){
@@ -1063,6 +1064,16 @@ function bracketHTML(){
   return `<div class="bracket">${h}</div>`;
 }
 
+// Practice games can be shown on a big screen (online only), from the game screen or the throwing order
+function renderScreenArea(parent){
+  const a=$("screenArea");if(a.parentNode!==parent)parent.appendChild(a);
+  const canScreen=NET.on&&!isTour();
+  a.hidden=!canScreen;
+  $("screenBtn").hidden=!canScreen||!!S.screenOpen;
+  $("screenBtn").textContent=S.screen?"Big screen on: show its link":"Show on a big screen";
+  $("screenBox").hidden=!canScreen||!S.screenOpen||!S.screen;
+  if(!$("screenBox").hidden){const u=svUrl(S.screen.code);$("screenLink").value=u;$("screenCode").textContent=S.screen.code;drawQr(u,"screenQr")}
+}
 function renderGame(){
   const g=G(), r=g.rem[g.cur], m=M();
   $("turnName").textContent=throwerOf(g,g.cur);
@@ -1086,12 +1097,7 @@ function renderGame(){
   $("pad").hidden=watch;$("undoBtn").hidden=watch;if(watch)$("lenBtn").hidden=true;
   if(watch){$("msg").textContent=S.live.status==="ended"?"The tournament has ended.":"Watching: the scores come from the phone at the table.";$("msg").className="msg"}
   $("board").innerHTML=columns(false);
-  // Practice games can be shown on a big screen (online only)
-  const canScreen=NET.on&&!isTour();
-  $("screenBtn").hidden=!canScreen||!!S.screenOpen;
-  $("screenBtn").textContent=S.screen?"Big screen on: show its link":"Show on a big screen";
-  $("screenBox").hidden=!canScreen||!S.screenOpen||!S.screen;
-  if(!$("screenBox").hidden){const u=svUrl(S.screen.code);$("screenLink").value=u;$("screenCode").textContent=S.screen.code;drawQr(u,"screenQr")}
+  renderScreenArea($("board").closest(".wrap"));
   const bw=$("board").parentElement;bw.scrollTop=bw.scrollHeight;
 }
 // On the game screen of a live table: say when scores are waiting for a signal

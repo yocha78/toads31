@@ -140,7 +140,7 @@ function renderDrawPreview(T,n){
   }
 }
 function tourHint(n){
-  const base="Knockout, one against one. Matches are best of 3, first to win 2 games (you can change it when a match starts), and winners meet in the next round.";
+  const base="Knockout, one against one. Matches are best of 3 (first to win 2 games), the semi-finals best of 5 and the final best of 7; the length can be changed when a match starts, and winners meet in the next round.";
   if(n<2)return base;
   const K=knockSize(n);
   if(K===n)return `${base} With ${n} players the draw follows the list: 1 v 2, 3 v 4…`;
@@ -1070,7 +1070,9 @@ function renderGame(){
   const fin=r<=c*2;
   $("turnNeed").innerHTML=esc(`${g.members?g.gp[g.cur]+" · ":""}Needs ${r} · ${c} toad${c>1?"s":""} (max ${c*2}) · Round ${g.round}`)+(fin?` · <span class="canfin">can finish now</span>`:"");
   $("matchInfo").hidden=!m;
-  if(m)$("matchInfo").textContent=`${tname(m.table)} · ${roundName(S.focus.ri)} · Game ${gameNo(m)} · ${m.a} ${m.wa}–${m.wb} ${m.b}`;
+  if(m)$("matchInfo").textContent=`${tname(m.table)} · ${roundName(S.focus.ri)} · Best of ${Toads.toWin(m)*2-1} · Game ${gameNo(m)} · ${m.a} ${m.wa}–${m.wb} ${m.b}`;
+  // Before anyone scores in a match's first game, the order and match length can still be changed
+  $("lenBtn").hidden=!Toads.freshFirst(m);
   $("quitBtn").textContent=m?"Back to tables":"End game";
   $("pad").innerHTML=Toads.keypad(c,r).map(({n,bust})=>`<button data-s="${n}" class="${bust?"over":n===r?"fin":""}" aria-label="Score ${n}${bust?' (bust)':n===r?' (finishes)':''}">${n}</button>`).join("");
   closeFinish();
@@ -1081,7 +1083,7 @@ function renderGame(){
   gameSync();
   // Watching a live table scored on another phone: the board only
   const watch=!scoring();
-  $("pad").hidden=watch;$("undoBtn").hidden=watch;
+  $("pad").hidden=watch;$("undoBtn").hidden=watch;if(watch)$("lenBtn").hidden=true;
   if(watch){$("msg").textContent=S.live.status==="ended"?"The tournament has ended.":"Watching: the scores come from the phone at the table.";$("msg").className="msg"}
   $("board").innerHTML=columns(false);
   // Practice games can be shown on a big screen (online only)
@@ -1282,7 +1284,8 @@ function askOrder(players){
   if(players.length<2){beginGame(players);return}
   const m=isTour()?M():null;
   // A match's first game: also choose how many games win the match
-  S.ord={pending:players,order:[],...(m&&!m.game&&m.wa+m.wb===0?{to:Toads.toWin(m)}:{})};S.stage="order";render();
+  const first=m&&m.wa+m.wb===0&&(!m.game||Toads.freshFirst(m));
+  S.ord={pending:players,order:[],...(first?{to:Number.isInteger(m.to)?m.to:Toads.defaultToWin(TOUR(),S.focus.ri)}:{})};S.stage="order";render();
 }
 function pick(name){
   const o=S.ord;o.order.push(name);
@@ -1300,7 +1303,7 @@ function beginGame(order){
   if(S.mode==="duo"&&!isTour())g.members=Object.fromEntries(S.teams.map(t=>[t.name.trim(),[t.a,t.b]]));
   // Online, Single and Duo games are saved: they get an id, a start time and the venue
   if(NET.on&&!isTour()){g.id=newId();g.started=Date.now();g.venue=S.venue||null}
-  if(isTour()){const m=M();if(S.ord&&S.ord.to&&!m.game&&m.wa+m.wb===0)m.to=S.ord.to;m.game=g}else S.g=g;
+  if(isTour()){const m=M();if(S.ord&&S.ord.to&&(!m.game||Toads.freshFirst(m)))m.to=S.ord.to;m.game=g}else S.g=g;
   S.ord=null;S.last=null;S.stage="game";
   $("msg").textContent="";$("quitConfirm").hidden=true;render();
 }
@@ -1587,6 +1590,7 @@ $("pad").addEventListener("click",e=>{const b=e.target.closest("button[data-s]")
 $("finishBtns").addEventListener("click",e=>{const b=e.target.closest("button[data-u]");if(b)score(+$("finishBtns").dataset.s,+b.dataset.u)});
 $("finishCancel").addEventListener("click",closeFinish);
 $("undoBtn").addEventListener("click",()=>{closeFinish();undo()});
+$("lenBtn").addEventListener("click",()=>{const m=M();if(Toads.freshFirst(m)){closeFinish();askOrder([m.a,m.b])}});
 $("undoWinBtn").addEventListener("click",undoWin);
 // In a tournament, leaving a game keeps it on its table to carry on later
 $("quitBtn").addEventListener("click",()=>{if(M())goHub();else $("quitConfirm").hidden=false});

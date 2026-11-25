@@ -216,6 +216,14 @@ function roundName(tour,ri){
 const gameNo=m=>m.wa+m.wb+1;
 // Games a player needs to win the match: chosen when the match's first game starts (1 to 5), 2 by default
 const toWin=m=>m&&Number.isInteger(m.to)?m.to:TO_WIN;
+// The length offered by default: best of 7 in the final, best of 5 in the semi-finals, best of 3 elsewhere
+function defaultToWin(tour,ri){
+  if(!tour||!tour.rounds||ri<0)return TO_WIN;
+  const fromEnd=tour.rounds.length-1-ri;
+  return fromEnd===0?4:fromEnd===1?3:TO_WIN;
+}
+// Game 1 is on but nobody has scored yet: it can still be started again with another order or length
+const freshFirst=m=>!!(m&&m.game&&!m.game.done&&!m.game.hist.length&&m.wa+m.wb===0);
 // The deciding game: both players one game short of winning the match
 const decider=m=>m.wa===toWin(m)-1&&m.wb===toWin(m)-1;
 
@@ -250,11 +258,12 @@ function applyOp(tour,table,op){
   if(op.t==="start"){
     if(g&&g.id===op.gameId)return {ok:true,dup:true};
     if(!ready(m))return {error:"this match is not ready",conflict:true};
-    if(g&&!g.done)return {error:"a game is already being played here",conflict:true};
+    const restart=freshFirst(m);
+    if(g&&!g.done&&!restart)return {error:"a game is already being played here",conflict:true};
     const o=op.order;
     if(!Array.isArray(o)||o.length!==2||!o.includes(m.a)||!o.includes(m.b)||o[0]===o[1])return {error:"the order must list the match's two players"};
     if(op.to!=null&&!(Number.isInteger(op.to)&&op.to>=1&&op.to<=5))return {error:"games to win must be 1 to 5"};
-    if(op.to!=null&&!g&&m.wa+m.wb===0)m.to=op.to;
+    if((!g||restart)&&m.wa+m.wb===0)m.to=op.to!=null?op.to:Number.isInteger(m.to)?m.to:defaultToWin(tour,op.ri);
     m.game=Object.assign(newG(o.slice()),{id:op.gameId,started:op.at||null});
     return {ok:true};
   }
@@ -305,7 +314,7 @@ function gameRecord(g,info){
     turns:g.hist.map(h=>({p:h.p,who:h.who||g.gp[h.p],s:h.s,c:h.c,bust:!!h.bust,before:h.before,round:h.round,at:h.at||null}))};
 }
 
-const Toads={TARGET,TO_WIN,toWin,decider,coinsFor,keypad,finishChoices,newG,throwerOf,playTurn,undoTurn,sideStats,playerStats,
+const Toads={TARGET,TO_WIN,toWin,defaultToWin,freshFirst,decider,coinsFor,keypad,finishChoices,newG,throwerOf,playTurn,undoTurn,sideStats,playerStats,
   mk,knockSize,seedOrder,qualiPers,buildTour,standings,qualiDone,settle,withdraw,setResult,allMatches,ready,assignTables,roundName,tableOn,tableName,gameNo,recordGameWin,undoGameWin,matchOf,applyOp,gameRecord};
 if(typeof module!=="undefined"&&module.exports)module.exports=Toads;else root.Toads=Toads;
 })(this);

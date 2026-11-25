@@ -454,7 +454,7 @@ function tvCallTable(k){
   $("tvCall").hidden=false;clearTimeout(T.callTimer);
   let over=false;
   const finish=()=>{if(over)return;over=true;setTimeout(()=>{if(TV===T){T.calling=null;$("tvCall").hidden=true;render()}},800)};
-  croakJingle();
+  freshAudio();croakJingle();
   const sp=window.speechSynthesis;
   if(!sp||!window.SpeechSynthesisUtterance){setTimeout(finish,5000);return}
   try{sp.cancel();const u=new SpeechSynthesisUtterance(" ");u.volume=0;sp.speak(u)}catch(e){} // unlocks speech on iPhone
@@ -1030,6 +1030,9 @@ function croakSamples(sr){
   for(let i=0;i<out.length;i++)out[i]*=.85/top;
   return out;
 }
+// On iPhone, once the voice has spoken, the page's sound clock can stay silent (it says "running" or "interrupted"
+// but plays nothing). A call is always a tap, so each call closes the old clock and starts a new one.
+function freshAudio(){const c=croak.ctx;croak.ctx=null;try{c&&c.close().catch(()=>{})}catch(e){}}
 // One sound clock for the page. On iPhone it starts paused until a tap, and "playback" lets it play with the ringer off.
 function audioCtx(){
   const A=window.AudioContext||window.webkitAudioContext;if(!A)return null;
@@ -1064,10 +1067,10 @@ function playBuf(ctx,data,at){
   src.buffer=b;g.gain.value=.9;src.connect(g).connect(ctx.destination);src.start(ctx.currentTime+at);
 }
 function croak(at=0){
-  try{const ctx=audioCtx();if(!ctx)return;playBuf(ctx,croak.data||(croak.data=croakSamples(ctx.sampleRate)),at)}catch(e){}
+  try{const ctx=audioCtx();if(!ctx)return;if(!croak.data||croak.sr!==ctx.sampleRate){croak.data=croakSamples(ctx.sampleRate);croak.sr=ctx.sampleRate}playBuf(ctx,croak.data,at)}catch(e){}
 }
 function croakNote(at,f,dur){
-  try{const ctx=audioCtx();if(!ctx)return;const c=croakNote.c||(croakNote.c={}), key=f+"/"+dur;playBuf(ctx,c[key]||(c[key]=croakNoteSamples(ctx.sampleRate,f,dur)),at)}catch(e){}
+  try{const ctx=audioCtx();if(!ctx)return;const c=croakNote.c||(croakNote.c={}), key=f+"/"+dur+"/"+ctx.sampleRate;playBuf(ctx,c[key]||(c[key]=croakNoteSamples(ctx.sampleRate,f,dur)),at)}catch(e){}
 }
 function renderWin(){
   const g=G(), L=S.last||{name:g.gp[g.rem.indexOf(0)]||g.gp[0]}, m=M();

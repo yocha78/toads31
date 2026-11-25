@@ -42,9 +42,10 @@ function matchWins(name){
 /* ---------- rendering ---------- */
 function render(){
   // A TV screen shows nothing else, and leaves this phone's own state alone
-  $("tvView").hidden=!TV;$("app").hidden=!!TV;
-  document.body.classList.toggle("tvmode",!!TV);
+  $("tvView").hidden=!TV;$("svView").hidden=!SV;$("app").hidden=!!(TV||SV);
+  document.body.classList.toggle("tvmode",!!(TV||SV));
   if(TV){renderTV();return}
+  if(SV){renderSV();return}
   for(const id of["setup","orderView","bracketView","game","win","playersView","statsView","menuView","toursView","venuesView"])$(id).hidden=true;
   const views={setup:["setup",renderSetup],menu:["menuView",renderMenu],tours:["toursView",renderTours],players:["playersView",renderPlayers],stats:["statsView",renderStats],venues:["venuesView",renderVenues],order:["orderView",renderOrder],bracket:["bracketView",renderHub],game:["game",renderGame],win:["win",renderWin]};
   $("menuBtn").hidden=!NET.on||MENU_STAGES.includes(S.stage);
@@ -58,6 +59,7 @@ function render(){
   const v=views[S.stage];
   if(!v){S.stage="setup";return render()}
   $(v[0]).hidden=false;v[1]();
+  screenPush();
   gameAwake();
   save();
   if(NET.on)syncGames();
@@ -365,6 +367,75 @@ async function saveEdit(form){
   }else{NET.toursMsg=failMsg(r,"save it");render()}
 }
 
+/* ---------- big screen for a practice game (#sv-<code>) ----------
+   The scoring phone posts its game (S.screen = {code, key}) after each change; a TV, laptop or tablet opens the
+   link and polls it. The same screen follows the next games on that phone until "Stop the big screen". */
+let SV=null, svTimer=null, screenSent=null, screenBusy=false, screenRetry=null;
+const svUrl=code=>location.origin+location.pathname+"#sv-"+code;
+const randCode=n=>{const A="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";return Array.from(crypto.getRandomValues(new Uint8Array(n)),x=>A[x%A.length]).join("")};
+function screenSnapshot(){
+  const g=S.g;if(!g||isTour()||!["game","win"].includes(S.stage))return null;
+  const win=g.done&&S.last&&g.gp.includes(S.last.name)?S.last.name:null;
+  return {gp:g.gp,rem:g.rem,cur:g.cur,round:g.round,done:!!g.done,winner:win,...(g.members?{members:g.members}:{}),
+    hist:g.hist.slice(-600).map(({p,s,before,round,bust,who,c})=>({p,s,before,round,bust,who,c})),
+    wins:Object.fromEntries(g.gp.map(n=>[n,matchWins(n)]).filter(([,w])=>w>0))};
+}
+async function screenPush(){
+  if(!S.screen||!NET.on||screenBusy)return;
+  const snap=screenSnapshot();if(!snap)return;
+  const body=JSON.stringify(snap);if(body===screenSent)return;
+  const scr=S.screen;screenBusy=true;clearTimeout(screenRetry);
+  const r=await ToadsApi.screen("POST",scr.code,{key:scr.key,game:snap});
+  screenBusy=false;
+  if(S.screen!==scr)return;
+  const note=t=>{$("screenNote").textContent=t};
+  if(r.status===200){screenSent=body;note("");if(JSON.stringify(screenSnapshot())!==body)screenPush();return}
+  // Someone else has this code (very unlikely): take a new one
+  if(r.status===403){S.screen={code:randCode(6),key:randCode(24)};screenSent=null;save();render();return}
+  note(r.offline?"No signal: the big screen catches up when it's back.":"Can't update the big screen right now. Trying again…");
+  screenRetry=setTimeout(screenPush,5000);
+}
+async function openSV(code){
+  SV={code};render();keepAwake();
+  await svFetch();
+  if(!svTimer)svTimer=setInterval(()=>{if(SV&&document.visibilityState==="visible")svFetch()},2500);
+}
+function closeSV(){SV=null;clearInterval(svTimer);svTimer=null;try{wake&&wake.release()}catch(e){}wake=null;render()}
+async function svFetch(){
+  const V=SV;if(!V)return;
+  const r=await ToadsApi.screen("GET",V.code,undefined,V.game?V.ver:undefined);
+  if(SV!==V)return;
+  const was=V.offline;V.offline=!!r.offline;
+  if(r.status===200&&r.data&&r.data.screen){Object.assign(V,{game:r.data.screen.game,ver:r.data.screen.ver,error:null});render();return}
+  if(r.status===200&&r.data&&r.data.same){if(was)render();return}
+  if(r.status===404){V.game=null;V.error="Waiting for the game. On the phone, start a game and tap “Show on a big screen”."}
+  else if(!V.game)V.error=r.offline?"No signal. Trying again…":"Can't reach the scores right now. Trying again…";
+  render();
+}
+function renderSV(){
+  const V=SV, g=V.game;
+  $("svMsg").hidden=!!g;$("svMsg").textContent=V.error||"Opening the game…";
+  $("svMain").hidden=!g;
+  $("svInfo").textContent=g?[g.members?"Duo game":"Practice game",g.done?"Finished":`Round ${g.round}`,V.offline?"no signal, last scores shown":null].filter(Boolean).join(" · "):"";
+  if(!g)return;
+  if(g.done&&g.winner)$("svTurn").innerHTML=`<div class="svwin">${TOAD}<b>${esc(g.winner)} wins!</b>${TOAD}</div>`;
+  else{
+    const r=g.rem[g.cur], c=coinsFor(g.hist.length,r), last=g.hist[g.hist.length-1];
+    $("svTurn").innerHTML=`<b>${esc(throwerOf(g,g.cur))}</b> to throw${g.members?` for ${esc(g.gp[g.cur])}`:""} · needs ${r}`+
+      `<span>${last?(last.bust?`${esc(last.who)} went bust and stays on ${last.before}`:`${esc(last.who)} scored ${last.s}`)+" · ":""}${c} toad${c>1?"s":""} this turn</span>`;
+  }
+  $("svBoard").innerHTML=columns(!!g.done,g.done?g.gp.indexOf(g.winner):-1,g,n=>g.wins[n]||0);
+  fitSV();
+}
+// The scores fill the board as large as they fit, without scrolling
+function fitSV(){
+  const box=$("svBoard"), sh=box.querySelector(".sheet");if(!sh||!box.clientWidth)return;
+  const cs=getComputedStyle(box), w=box.clientWidth-parseFloat(cs.paddingLeft)-parseFloat(cs.paddingRight), h=box.clientHeight-parseFloat(cs.paddingTop)-parseFloat(cs.paddingBottom);
+  let k=3.2;
+  for(;k>.5;k-=.1){sh.style.width=(w/k)+"px";if(sh.offsetHeight*k<=h)break}
+  sh.style.transform=`scale(${k})`;
+}
+
 /* ---------- TV screen (#tv-<code>): tables and what's next on the left, the bracket on the right ---------- */
 let tvTimer=null, wake=null;
 async function openTV(id){
@@ -375,13 +446,13 @@ async function openTV(id){
 }
 function closeTV(){TV=null;clearInterval(tvTimer);tvTimer=null;try{wake&&wake.release()}catch(e){}wake=null;render()}
 // Ask the screen not to go to sleep (where the browser allows it)
-async function keepAwake(){try{if(TV&&navigator.wakeLock&&document.visibilityState==="visible")wake=await navigator.wakeLock.request("screen")}catch(e){}}
+async function keepAwake(){try{if((TV||SV)&&navigator.wakeLock&&document.visibilityState==="visible")wake=await navigator.wakeLock.request("screen")}catch(e){}}
 // The scoring phone stays on during a game (screens otherwise dim and lock between turns)
 async function gameAwake(){
-  const want=!TV&&["game","order"].includes(S.stage)&&document.visibilityState==="visible";
+  const want=!TV&&!SV&&["game","order"].includes(S.stage)&&document.visibilityState==="visible";
   try{
     if(want&&!wake&&navigator.wakeLock){wake=await navigator.wakeLock.request("screen");wake.addEventListener("release",()=>{wake=null})}
-    else if(!want&&!TV&&wake){const w=wake;wake=null;await w.release()}
+    else if(!want&&!TV&&!SV&&wake){const w=wake;wake=null;await w.release()}
   }catch(e){}
 }
 async function tvFetch(full){
@@ -991,6 +1062,12 @@ function renderGame(){
   $("pad").hidden=watch;$("undoBtn").hidden=watch;
   if(watch){$("msg").textContent=S.live.status==="ended"?"The tournament has ended.":"Watching: the scores come from the phone at the table.";$("msg").className="msg"}
   $("board").innerHTML=columns(false);
+  // Practice games can be shown on a big screen (online only)
+  const canScreen=NET.on&&!isTour();
+  $("screenBtn").hidden=!canScreen||!!S.screenOpen;
+  $("screenBtn").textContent=S.screen?"Big screen on: show its link":"Show on a big screen";
+  $("screenBox").hidden=!canScreen||!S.screenOpen||!S.screen;
+  if(!$("screenBox").hidden){const u=svUrl(S.screen.code);$("screenLink").value=u;drawQr(u,"screenQr")}
   const bw=$("board").parentElement;bw.scrollTop=bw.scrollHeight;
 }
 // On the game screen of a live table: say when scores are waiting for a signal
@@ -1135,14 +1212,14 @@ function tally(n){
 const ringIf=n=>n>0&&n<=8?`<span class="ring" title="Can win this turn">${n}</span>`:n;
 
 // Chalkboard grid: round numbers once on the left, one column per player
-function columns(final,winner){
-  const g=G(), P=g.gp, idx=P.map((_,i)=>i);
+function columns(final,winner,g=G(),wins=matchWins){
+  const P=g.gp, idx=P.map((_,i)=>i);
   const on=i=>final?i===winner:i===g.cur;
   const cell=(i,cls,html)=>`<div class="c ${cls}${on(i)?" on":""}">${html}</div>`;
   const byRound=idx.map(i=>{const m={};g.hist.forEach(h=>{if(h.p===i)m[h.round]=h});return m});
   const maxR=g.hist.reduce((a,h)=>Math.max(a,h.round),0);
   const head=i=>{
-    let h=esc(P[i])+tally(matchWins(P[i]));
+    let h=esc(P[i])+tally(wins(P[i]));
     if(g.members){const nx=throwerOf(g,i);h+=`<div class="mem">${g.members[P[i]].map(m=>`<span class="${!final&&m===nx?"next":""}">${esc(m)}</span>`).join(" · ")}</div>`}
     return h;
   };
@@ -1527,9 +1604,11 @@ if(NET.on){
   loadLiveList();
   // A tournament link (#t-<code>) opens that tournament; #tv-<code> turns this page into its TV screen
   const openHash=()=>{
-    const tv=/^#tv-([A-Z0-9]{6})$/i.exec(location.hash);
-    if(tv){if(!TV||TV.id!==tv[1].toUpperCase())openTV(tv[1].toUpperCase());return}
+    const tv=/^#tv-([A-Z0-9]{6})$/i.exec(location.hash), sv=/^#sv-([A-Z0-9]{6})$/i.exec(location.hash);
+    if(tv){if(SV)closeSV();if(!TV||TV.id!==tv[1].toUpperCase())openTV(tv[1].toUpperCase());return}
+    if(sv){if(TV)closeTV();if(!SV||SV.code!==sv[1].toUpperCase())openSV(sv[1].toUpperCase());return}
     if(TV)closeTV();
+    if(SV)closeSV();
     const id=liveHash();if(id&&(!S.live||S.live.id!==id))follow(id);
   };
   openHash();window.addEventListener("hashchange",openHash);
@@ -1538,6 +1617,13 @@ if(NET.on){
   // Voices load in the background in some browsers: ask early so the first call has them
   try{window.speechSynthesis&&window.speechSynthesis.getVoices()}catch(e){}
   $("tvSwitch").addEventListener("click",()=>{if(TV){TV.showQuali=!TV.showQuali;render()}});
+  $("svExit").addEventListener("click",()=>{try{history.replaceState(null,"",location.pathname+location.search)}catch(e){}closeSV()});
+  document.addEventListener("visibilitychange",()=>{if(SV&&document.visibilityState==="visible"){keepAwake();svFetch()}});
+  window.addEventListener("resize",()=>{if(SV)fitSV()});
+  $("screenBtn").addEventListener("click",()=>{if(!S.screen){S.screen={code:randCode(6),key:randCode(24)};screenSent=null}S.screenOpen=true;render()});
+  $("screenClose").addEventListener("click",()=>{S.screenOpen=false;render()});
+  $("screenStop").addEventListener("click",()=>{S.screen=null;S.screenOpen=false;screenSent=null;render()});
+  $("screenCopy").addEventListener("click",async()=>{try{await navigator.clipboard.writeText($("screenLink").value);$("screenNote").textContent="Link copied."}catch(e){$("screenLink").select();$("screenNote").textContent="Select the link and copy it."}});
   $("tvExit").addEventListener("click",()=>{try{history.replaceState(null,"",location.pathname+location.search)}catch(e){}closeTV()});
   document.addEventListener("visibilitychange",()=>{if(TV&&document.visibilityState==="visible"){keepAwake();tvFetch(false)}else gameAwake()});
   setInterval(()=>{if(S.live&&document.visibilityState==="visible"){if(S.live.queue.length)liveFlush();else liveFetch(false)}},LIVE_POLL);

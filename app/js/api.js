@@ -88,6 +88,10 @@ window.ToadsApi=(()=>{
       if(r.status===401&&o){this.logout();r.expired=true}
       return r;
     },
+    /* Big screen of a practice game: POST the game (with the screen's key) or GET it → {status, data}, or {offline:true} */
+    async screen(method,code,body,since){
+      try{return await call(method,`/screens/${encodeURIComponent(code)}`+(since!=null?`?since=${since}`:""),body)}catch(e){return{offline:true}}
+    },
     // Organiser: DELETE a game, a player's games or every game (path as in the API) → {deleted} | {error} | {offline}
     async gamesDelete(path){
       const o=this.organiser();if(!o)return{error:"organiser login needed",expired:true};

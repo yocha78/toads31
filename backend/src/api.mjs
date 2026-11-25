@@ -6,6 +6,7 @@ import { listAll, add, update, remove, mergePlayers } from "./lib/directory.mjs"
 import { saveGame, getGame, recentGames, deleteGame, deleteGames } from "./lib/games.mjs";
 import { login, isOrganiser, parameterStorePassword } from "./lib/auth.mjs";
 import { playerStats } from "./lib/stats.mjs";
+import { putScreen, getScreen } from "./lib/screens.mjs";
 import {
   createTournament, getTournament, listTournaments, listAllTournaments, claimTable, releaseTable, playTable, endTournament,
   deleteTournament, editTournament, restartTournament,
@@ -82,6 +83,12 @@ export function makeHandler(db = defaultDb, table = process.env.TABLE_NAME, getP
       const r = await deleteTournament(db, table, id(e), (e.queryStringParameters || {}).games === "delete");
       return r ? json(200, r) : json(404, { error: "no such tournament" });
     }),
+    // Big screen for a practice game: the phone posts the game, the TV polls it (?since=<ver> answers {same:true})
+    "POST /screens/{id}": async e => reply(await putScreen(db, table, id(e), readBody(e))),
+    "GET /screens/{id}": async e => {
+      const s = await getScreen(db, table, id(e), (e.queryStringParameters || {}).since);
+      return s ? json(200, s.same ? s : { screen: s }) : json(404, { error: "no such screen" });
+    },
     "GET /games/{id}": async e => {
       const game = await getGame(db, table, (e.pathParameters || {}).id);
       return game ? json(200, { game }) : json(404, { error: "no such game" });

@@ -356,6 +356,14 @@
           <button class="ghost" id="undoBtn">Undo last turn</button>
           <button class="ghost" id="quitBtn">End game</button>
         </div>
+        <button class="ghost" id="screenBtn" hidden>Show on a big screen</button>
+        <div class="sharebox screenbox" id="screenBox" hidden>
+          <p><b>On the big screen (TV, laptop or tablet), open this link or scan the code.</b> It follows this game's scores as you play, and the next games too.</p>
+          <div class="qr" id="screenQr"></div>
+          <div class="row"><input type="text" id="screenLink" readonly aria-label="Big screen link"><button id="screenCopy">Copy link</button></div>
+          <p class="hint" id="screenNote"></p>
+          <div class="actions"><button id="screenClose">Hide this</button><button class="ghost" id="screenStop">Stop the big screen</button></div>
+        </div>
         <div class="confirm" id="quitConfirm" hidden>
           <span>End this game and go back to players?</span>
           <div class="actions"><button id="quitNo">Keep playing</button><button class="primary" id="quitYes">End game</button></div>
@@ -380,7 +388,7 @@
     <button class="ghost" id="undoWinBtn">Undo winning throw</button>
   </section>
   <p class="hint" id="syncNote" style="text-align:center" aria-live="polite" hidden></p>
-  <p class="hint" id="verLine" style="text-align:center">Version 25 Nov 2026 · Croak jingle plays on every call on iPhone</p>
+  <p class="hint" id="verLine" style="text-align:center">Version 25 Nov 2026 · Practice games on a big screen</p>
 </div>
 
 <!-- TV SCREEN (#tv-<code>): one tournament for a big screen in the pub -->
@@ -410,6 +418,20 @@
     <div class="qr" id="tvQr"></div>
     <div><b>Scan if you want to register the score of a game</b><span>Ask the organiser for the PIN</span><span class="tvlink" id="tvLink"></span></div>
   </footer>
+</section>
+
+<!-- BIG SCREEN for a practice game (#sv-<code>): the scores, following the phone that scores -->
+<section id="svView" class="tv sv" hidden>
+  <header class="tvhead">
+    <h1>Toads 31</h1>
+    <span class="tvinfo" id="svInfo"></span>
+    <button type="button" class="tvexit" id="svExit">Exit</button>
+  </header>
+  <p class="tvmsg" id="svMsg" hidden></p>
+  <div class="svmain" id="svMain">
+    <div class="svturn" id="svTurn"></div>
+    <div class="svboard chalk" id="svBoard"></div>
+  </div>
 </section>
 
 <script src="config.js?v=20261024"></script>

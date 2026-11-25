@@ -439,3 +439,17 @@ body.tvmode{background:#141a18;color:var(--chalk);overflow:hidden}
 .orgonly::before{margin-right:5px;vertical-align:-2px}
 .menubtn.org{border-color:var(--brass)}
 #liveOrgLink{align-self:flex-start}
+
+/* Big screen for a practice game (#sv-<code>) */
+.screenbox{border-top:1px solid var(--line);padding-top:10px;margin-top:4px}
+.screenbox p{margin:0;text-align:center}
+.screenbox .actions{width:100%}
+.sv{grid-template-rows:auto minmax(0,1fr)}
+.svmain{display:flex;flex-direction:column;gap:1.2vh;min-height:0}
+.svturn{text-align:center;font-size:2.4em;line-height:1.15}
+.svturn b{font-family:var(--chalk-display);color:var(--chalk-yellow)}
+.svturn span{display:block;font-size:.55em;color:var(--chalk-dim)}
+.svturn .svwin{display:inline-flex;align-items:center;gap:.4em}
+.svturn .svwin .toad{width:1.6em;height:auto}
+.svboard{flex:1;min-height:0;overflow:hidden;display:flex;justify-content:center;align-items:flex-start;border-width:clamp(6px,.6vw,14px)}
+.svboard .sheet{transform-origin:top center}

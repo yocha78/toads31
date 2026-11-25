@@ -468,4 +468,4 @@ body.tvmode{background:#141a18;color:var(--chalk);overflow:hidden}
 .tvdetail .sheet .row{font-size:.85em}
 .tvdetail .sheet .toad{width:1em;height:auto}
 .tvtable.open{border-color:var(--chalk-yellow);background:rgba(242,211,107,.06)}
-@media (prefers-reduced-motion:no-preference){.tvtable.open .tvdetail{animation:callin .35s ease-out}}
+@media (prefers-reduced-motion:no-preference){.tvdetail.fresh{animation:callin .35s ease-out}}

@@ -478,3 +478,4 @@ body.tvmode{background:#141a18;color:var(--chalk);overflow:hidden}
 .towin p{margin:0;text-align:center}
 #screenArea{display:flex;flex-direction:column;gap:14px}
 #orderView #screenArea{margin-top:6px}
+.tapwait #pad button,.tapwait #undoBtn{opacity:.45;pointer-events:none;transition:opacity .1s}

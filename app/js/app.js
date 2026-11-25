@@ -1592,10 +1592,18 @@ $("endTourNo").addEventListener("click",()=>{$("endTourConfirm").hidden=true});
 $("endTourYes").addEventListener("click",()=>{S.tour=null;S.stage="setup";render()});
 $("champNew").addEventListener("click",startTournament);
 $("champChange").addEventListener("click",()=>{if(S.live){leaveLive();return}S.tour=null;S.stage="setup";render()});
-$("pad").addEventListener("click",e=>{const b=e.target.closest("button[data-s]");if(b)score(+b.dataset.s)});
+// A short pause after each score or undo, so a double tap can't score twice by mistake
+const TAP_PAUSE=900;let tapUntil=0,tapTimer=null;
+function tapGate(){
+  if(Date.now()<tapUntil)return false;
+  tapUntil=Date.now()+TAP_PAUSE;document.body.classList.add("tapwait");
+  clearTimeout(tapTimer);tapTimer=setTimeout(()=>document.body.classList.remove("tapwait"),TAP_PAUSE);
+  return true;
+}
+$("pad").addEventListener("click",e=>{const b=e.target.closest("button[data-s]");if(b&&tapGate())score(+b.dataset.s)});
 $("finishBtns").addEventListener("click",e=>{const b=e.target.closest("button[data-u]");if(b)score(+$("finishBtns").dataset.s,+b.dataset.u)});
 $("finishCancel").addEventListener("click",closeFinish);
-$("undoBtn").addEventListener("click",()=>{closeFinish();undo()});
+$("undoBtn").addEventListener("click",()=>{if(!tapGate())return;closeFinish();undo()});
 $("lenBtn").addEventListener("click",()=>{const m=M();if(Toads.freshFirst(m)){closeFinish();askOrder([m.a,m.b])}});
 $("undoWinBtn").addEventListener("click",undoWin);
 // In a tournament, leaving a game keeps it on its table to carry on later

@@ -416,7 +416,7 @@ function renderSV(){
   const V=SV, g=V.game;
   $("svMsg").hidden=!!g;$("svMsg").textContent=V.error||"Opening the game…";
   $("svMain").hidden=!g;
-  $("svInfo").textContent=g?[g.members?"Duo game":"Practice game",g.done?"Finished":`Round ${g.round}`,V.offline?"no signal, last scores shown":null].filter(Boolean).join(" · "):"";
+  $("svInfo").textContent=g?[g.members?"Duo game":"Practice game",`code ${V.code}`,g.done?"Finished":`Round ${g.round}`,V.offline?"no signal, last scores shown":null].filter(Boolean).join(" · "):"";
   if(!g)return;
   if(g.done&&g.winner)$("svTurn").innerHTML=`<div class="svwin">${TOAD}<b>${esc(g.winner)} wins!</b>${TOAD}</div>`;
   else{
@@ -1067,7 +1067,7 @@ function renderGame(){
   $("screenBtn").hidden=!canScreen||!!S.screenOpen;
   $("screenBtn").textContent=S.screen?"Big screen on: show its link":"Show on a big screen";
   $("screenBox").hidden=!canScreen||!S.screenOpen||!S.screen;
-  if(!$("screenBox").hidden){const u=svUrl(S.screen.code);$("screenLink").value=u;drawQr(u,"screenQr")}
+  if(!$("screenBox").hidden){const u=svUrl(S.screen.code);$("screenLink").value=u;$("screenCode").textContent=S.screen.code;drawQr(u,"screenQr")}
   const bw=$("board").parentElement;bw.scrollTop=bw.scrollHeight;
 }
 // On the game screen of a live table: say when scores are waiting for a signal

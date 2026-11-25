@@ -48,6 +48,10 @@ Resources:
         PointInTimeRecoveryEnabled: !If [IsLive, true, false]
       SSESpecification:
         SSEEnabled: true
+      # Big screens of practice games are forgotten a day after their last change
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
 
   Api:
     Type: AWS::Serverless::HttpApi
@@ -173,6 +177,12 @@ Resources:
         DeletePlayerGames:
           Type: HttpApi
           Properties: {ApiId: !Ref Api, Path: "/players/{id}/games", Method: DELETE}
+        PutScreen:
+          Type: HttpApi
+          Properties: {ApiId: !Ref Api, Path: "/screens/{id}", Method: POST}
+        GetScreen:
+          Type: HttpApi
+          Properties: {ApiId: !Ref Api, Path: "/screens/{id}", Method: GET}
 
   ApiLogs:
     Type: AWS::Logs::LogGroup

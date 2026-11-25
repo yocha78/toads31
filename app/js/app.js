@@ -66,6 +66,7 @@ function render(){
 }
 
 function renderSetup(){
+  $("codeForm").hidden=!NET.on;
   const T=S.mode==="tournament", D=S.mode==="duo", n=S.players.length;
   $("modeSingle").setAttribute("aria-pressed",S.mode==="single");
   $("modeDuo").setAttribute("aria-pressed",D);
@@ -1620,6 +1621,18 @@ if(NET.on){
   $("svExit").addEventListener("click",()=>{try{history.replaceState(null,"",location.pathname+location.search)}catch(e){}closeSV()});
   document.addEventListener("visibilitychange",()=>{if(SV&&document.visibilityState==="visible"){keepAwake();svFetch()}});
   window.addEventListener("resize",()=>{if(SV)fitSV()});
+  // Type a code on a TV: a practice game's big screen (#sv-) or a tournament's TV screen (#tv-)
+  $("codeForm").addEventListener("submit",async e=>{
+    e.preventDefault();
+    const c=$("codeInput").value.toUpperCase().replace(/[^A-Z0-9]/g,""), note=t=>{$("codeMsg").textContent=t;$("codeMsg").className="msg"+(t?" bad":"")};
+    if(c.length!==6){note("A code has 6 letters and numbers.");return}
+    note("");$("codeMsg").textContent="Looking for it…";
+    const s=await ToadsApi.screen("GET",c);
+    if(s.status===200){$("codeInput").value="";location.hash="#sv-"+c;return}
+    const t=await ToadsApi.tour("GET","/"+c);
+    if(t.status===200){$("codeInput").value="";location.hash="#tv-"+c;return}
+    note(s.offline&&t.offline?"No signal. Try again in a moment.":"No game or tournament with that code. Check it on the phone.");
+  });
   $("screenBtn").addEventListener("click",()=>{if(!S.screen){S.screen={code:randCode(6),key:randCode(24)};screenSent=null}S.screenOpen=true;render()});
   $("screenClose").addEventListener("click",()=>{S.screenOpen=false;render()});
   $("screenStop").addEventListener("click",()=>{S.screen=null;S.screenOpen=false;screenSent=null;render()});

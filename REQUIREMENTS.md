@@ -25,6 +25,7 @@ Scoring web app for **Toad in the Hole**, the Sussex pub game, at `https://brigh
 
 ### 1.3 Score entry
 - The keypad shows only scores the toads can make: `0 … 2 × toads`. For example, 2 toads shows 0–4.
+- After each score or undo, the keypad and Undo pause for 0.9 s (greyed out), so a double tap can't score twice by mistake (25 Nov 2026).
 - Scores above the points left still appear, styled dashed. Tapping one records a bust.
 
 ### 1.4 Ambiguous finish

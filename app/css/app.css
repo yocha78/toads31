@@ -441,7 +441,9 @@ body.tvmode{background:#141a18;color:var(--chalk);overflow:hidden}
 #liveOrgLink{align-self:flex-start}
 
 /* Big screen for a practice game (#sv-<code>) */
-.screenbox{border-top:1px solid var(--line);padding-top:10px;margin-top:4px}
+.screenbox{gap:10px}
+.screencode{font-size:1.05rem}
+.screencode b{font-family:var(--display);font-size:1.6rem;letter-spacing:.12em;margin-left:.3em}
 .screenbox p{margin:0;text-align:center}
 .screenbox .actions{width:100%}
 .sv{grid-template-rows:auto minmax(0,1fr)}

@@ -356,20 +356,21 @@
           <button class="ghost" id="undoBtn">Undo last turn</button>
           <button class="ghost" id="quitBtn">End game</button>
         </div>
-        <button class="ghost" id="screenBtn" hidden>Show on a big screen</button>
-        <div class="sharebox screenbox" id="screenBox" hidden>
-          <p><b>On the big screen (TV, laptop or tablet), open this link or scan the code.</b> It follows this game's scores as you play, and the next games too.</p>
-          <div class="qr" id="screenQr"></div>
-          <div class="row"><input type="text" id="screenLink" readonly aria-label="Big screen link"><button id="screenCopy">Copy link</button></div>
-          <p class="hint" id="screenNote"></p>
-          <div class="actions"><button id="screenClose">Hide this</button><button class="ghost" id="screenStop">Stop the big screen</button></div>
-        </div>
         <div class="confirm" id="quitConfirm" hidden>
           <span>End this game and go back to players?</span>
           <div class="actions"><button id="quitNo">Keep playing</button><button class="primary" id="quitYes">End game</button></div>
         </div>
       </div>
       <div class="cols-wrap chalk"><div id="board"></div></div>
+      <button class="ghost" id="screenBtn" hidden>Show on a big screen</button>
+      <div class="sharebox screenbox panel" id="screenBox" hidden>
+        <p><b>On the big screen (TV, laptop or tablet), open this link or scan the code.</b> It follows this game's scores as you play, and the next games too.</p>
+        <p class="screencode">Game code <b id="screenCode"></b></p>
+        <div class="qr" id="screenQr"></div>
+        <div class="row"><input type="text" id="screenLink" readonly aria-label="Big screen link"><button id="screenCopy">Copy link</button></div>
+        <p class="hint" id="screenNote"></p>
+        <div class="actions"><button id="screenClose">Hide this</button><button class="ghost" id="screenStop">Stop the big screen</button></div>
+      </div>
     </div>
   </section>
 
@@ -388,7 +389,7 @@
     <button class="ghost" id="undoWinBtn">Undo winning throw</button>
   </section>
   <p class="hint" id="syncNote" style="text-align:center" aria-live="polite" hidden></p>
-  <p class="hint" id="verLine" style="text-align:center">Version 25 Nov 2026 · Practice games on a big screen</p>
+  <p class="hint" id="verLine" style="text-align:center">Version 25 Nov 2026 · Big screen button at the bottom, with a game code</p>
 </div>
 
 <!-- TV SCREEN (#tv-<code>): one tournament for a big screen in the pub -->

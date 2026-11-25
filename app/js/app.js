@@ -42,9 +42,10 @@ function matchWins(name){
 /* ---------- rendering ---------- */
 function render(){
   // A TV screen shows nothing else, and leaves this phone's own state alone
-  $("tvView").hidden=!TV;$("app").hidden=!!TV;
-  document.body.classList.toggle("tvmode",!!TV);
+  $("tvView").hidden=!TV;$("svView").hidden=!SV;$("app").hidden=!!(TV||SV);
+  document.body.classList.toggle("tvmode",!!(TV||SV));
   if(TV){renderTV();return}
+  if(SV){renderSV();return}
   for(const id of["setup","orderView","bracketView","game","win","playersView","statsView","menuView","toursView","venuesView"])$(id).hidden=true;
   const views={setup:["setup",renderSetup],menu:["menuView",renderMenu],tours:["toursView",renderTours],players:["playersView",renderPlayers],stats:["statsView",renderStats],venues:["venuesView",renderVenues],order:["orderView",renderOrder],bracket:["bracketView",renderHub],game:["game",renderGame],win:["win",renderWin]};
   $("menuBtn").hidden=!NET.on||MENU_STAGES.includes(S.stage);
@@ -58,6 +59,7 @@ function render(){
   const v=views[S.stage];
   if(!v){S.stage="setup";return render()}
   $(v[0]).hidden=false;v[1]();
+  screenPush();
   gameAwake();
   save();
   if(NET.on)syncGames();
@@ -365,6 +367,75 @@ async function saveEdit(form){
   }else{NET.toursMsg=failMsg(r,"save it");render()}
 }
 
+/* ---------- big screen for a practice game (#sv-<code>) ----------
+   The scoring phone posts its game (S.screen = {code, key}) after each change; a TV, laptop or tablet opens the
+   link and polls it. The same screen follows the next games on that phone until "Stop the big screen". */
+let SV=null, svTimer=null, screenSent=null, screenBusy=false, screenRetry=null;
+const svUrl=code=>location.origin+location.pathname+"#sv-"+code;
+const randCode=n=>{const A="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";return Array.from(crypto.getRandomValues(new Uint8Array(n)),x=>A[x%A.length]).join("")};
+function screenSnapshot(){
+  const g=S.g;if(!g||isTour()||!["game","win"].includes(S.stage))return null;
+  const win=g.done&&S.last&&g.gp.includes(S.last.name)?S.last.name:null;
+  return {gp:g.gp,rem:g.rem,cur:g.cur,round:g.round,done:!!g.done,winner:win,...(g.members?{members:g.members}:{}),
+    hist:g.hist.slice(-600).map(({p,s,before,round,bust,who,c})=>({p,s,before,round,bust,who,c})),
+    wins:Object.fromEntries(g.gp.map(n=>[n,matchWins(n)]).filter(([,w])=>w>0))};
+}
+async function screenPush(){
+  if(!S.screen||!NET.on||screenBusy)return;
+  const snap=screenSnapshot();if(!snap)return;
+  const body=JSON.stringify(snap);if(body===screenSent)return;
+  const scr=S.screen;screenBusy=true;clearTimeout(screenRetry);
+  const r=await ToadsApi.screen("POST",scr.code,{key:scr.key,game:snap});
+  screenBusy=false;
+  if(S.screen!==scr)return;
+  const note=t=>{$("screenNote").textContent=t};
+  if(r.status===200){screenSent=body;note("");if(JSON.stringify(screenSnapshot())!==body)screenPush();return}
+  // Someone else has this code (very unlikely): take a new one
+  if(r.status===403){S.screen={code:randCode(6),key:randCode(24)};screenSent=null;save();render();return}
+  note(r.offline?"No signal: the big screen catches up when it's back.":"Can't update the big screen right now. Trying again…");
+  screenRetry=setTimeout(screenPush,5000);
+}
+async function openSV(code){
+  SV={code};render();keepAwake();
+  await svFetch();
+  if(!svTimer)svTimer=setInterval(()=>{if(SV&&document.visibilityState==="visible")svFetch()},2500);
+}
+function closeSV(){SV=null;clearInterval(svTimer);svTimer=null;try{wake&&wake.release()}catch(e){}wake=null;render()}
+async function svFetch(){
+  const V=SV;if(!V)return;
+  const r=await ToadsApi.screen("GET",V.code,undefined,V.game?V.ver:undefined);
+  if(SV!==V)return;
+  const was=V.offline;V.offline=!!r.offline;
+  if(r.status===200&&r.data&&r.data.screen){Object.assign(V,{game:r.data.screen.game,ver:r.data.screen.ver,error:null});render();return}
+  if(r.status===200&&r.data&&r.data.same){if(was)render();return}
+  if(r.status===404){V.game=null;V.error="Waiting for the game. On the phone, start a game and tap “Show on a big screen”."}
+  else if(!V.game)V.error=r.offline?"No signal. Trying again…":"Can't reach the scores right now. Trying again…";
+  render();
+}
+function renderSV(){
+  const V=SV, g=V.game;
+  $("svMsg").hidden=!!g;$("svMsg").textContent=V.error||"Opening the game…";
+  $("svMain").hidden=!g;
+  $("svInfo").textContent=g?[g.members?"Duo game":"Practice game",`code ${V.code}`,g.done?"Finished":`Round ${g.round}`,V.offline?"no signal, last scores shown":null].filter(Boolean).join(" · "):"";
+  if(!g)return;
+  if(g.done&&g.winner)$("svTurn").innerHTML=`<div class="svwin">${TOAD}<b>${esc(g.winner)} wins!</b>${TOAD}</div>`;
+  else{
+    const r=g.rem[g.cur], c=coinsFor(g.hist.length,r), last=g.hist[g.hist.length-1];
+    $("svTurn").innerHTML=`<b>${esc(throwerOf(g,g.cur))}</b> to throw${g.members?` for ${esc(g.gp[g.cur])}`:""} · needs ${r}`+
+      `<span>${last?(last.bust?`${esc(last.who)} went bust and stays on ${last.before}`:`${esc(last.who)} scored ${last.s}`)+" · ":""}${c} toad${c>1?"s":""} this turn</span>`;
+  }
+  $("svBoard").innerHTML=columns(!!g.done,g.done?g.gp.indexOf(g.winner):-1,g,n=>g.wins[n]||0);
+  fitSV();
+}
+// The scores fill the board as large as they fit, without scrolling
+function fitSV(){
+  const box=$("svBoard"), sh=box.querySelector(".sheet");if(!sh||!box.clientWidth)return;
+  const cs=getComputedStyle(box), w=box.clientWidth-parseFloat(cs.paddingLeft)-parseFloat(cs.paddingRight), h=box.clientHeight-parseFloat(cs.paddingTop)-parseFloat(cs.paddingBottom);
+  let k=3.2;
+  for(;k>.5;k-=.1){sh.style.width=(w/k)+"px";if(sh.offsetHeight*k<=h)break}
+  sh.style.transform=`scale(${k})`;
+}
+
 /* ---------- TV screen (#tv-<code>): tables and what's next on the left, the bracket on the right ---------- */
 let tvTimer=null, wake=null;
 async function openTV(id){
@@ -375,13 +446,13 @@ async function openTV(id){
 }
 function closeTV(){TV=null;clearInterval(tvTimer);tvTimer=null;try{wake&&wake.release()}catch(e){}wake=null;render()}
 // Ask the screen not to go to sleep (where the browser allows it)
-async function keepAwake(){try{if(TV&&navigator.wakeLock&&document.visibilityState==="visible")wake=await navigator.wakeLock.request("screen")}catch(e){}}
+async function keepAwake(){try{if((TV||SV)&&navigator.wakeLock&&document.visibilityState==="visible")wake=await navigator.wakeLock.request("screen")}catch(e){}}
 // The scoring phone stays on during a game (screens otherwise dim and lock between turns)
 async function gameAwake(){
-  const want=!TV&&["game","order"].includes(S.stage)&&document.visibilityState==="visible";
+  const want=!TV&&!SV&&["game","order"].includes(S.stage)&&document.visibilityState==="visible";
   try{
     if(want&&!wake&&navigator.wakeLock){wake=await navigator.wakeLock.request("screen");wake.addEventListener("release",()=>{wake=null})}
-    else if(!want&&!TV&&wake){const w=wake;wake=null;await w.release()}
+    else if(!want&&!TV&&!SV&&wake){const w=wake;wake=null;await w.release()}
   }catch(e){}
 }
 async function tvFetch(full){
@@ -414,7 +485,7 @@ function renderTV(){
     const side=(name,w)=>{const i=g?g.gp.indexOf(name):-1;return `<div class="tvp${g&&g.cur===i?" up":""}"><span>${esc(name)}</span><i>${w}</i><b>${g?ringIf(g.rem[i]):""}</b></div>`};
     return `<div class="tvtable${g?" playing":""}"><div class="tvtn"><span>${TN(k)}</span><span>${roundName(ri)} · game ${gameNo(m)}</span></div>
       ${side(m.a,m.wa)}${side(m.b,m.wb)}
-      <div class="tvst">${g?`${esc(throwerOf(g,g.cur))} to throw · round ${g.round}`:claimed?"Ready to start":"Ready: scan the code to score this table"}</div></div>`;
+      <div class="tvst"><span>${g?`${esc(throwerOf(g,g.cur))} to throw · round ${g.round}`:claimed?"Ready to start":"Ready: scan the code to score this table"}</span>${g?"":`<button type="button" class="tvcallbtn${T.calling===k?" on":""}" data-call="${k}" title="Call the players to this table" aria-label="Call ${esc(m.a)} and ${esc(m.b)} to ${TN(k)}"${T.calling!=null?" disabled":""}>${MEGAPHONE}</button>`}</div></div>`;
   }).join("")||`<p class="tvnone">${t.champion?"All games played.":"No games on the tables right now."}</p>`;
   // Coming up: matches still to be played that have no table yet, earliest round first
   const waiting=list.filter(({m})=>!m.winner&&!m.bye&&m.table==null&&m.a&&m.b), next=waiting.slice(0,6);
@@ -440,6 +511,38 @@ function tvCallOut(on){
   $("tvCall").hidden=false;
   clearTimeout(T.callTimer);T.callTimer=setTimeout(()=>{$("tvCall").hidden=true},12000);
 }
+/* The call button (megaphone) on a table whose match hasn't started: like an airport call, a jingle of three croaks rising
+   low, medium, high, then the call said twice
+   ("Al and Bo are called to Garden for their match. I repeat, Al and Bo are called to Garden."). The browser speaks it (no sound file),
+   in a British voice where the device has one. The call is also shown on the screen while it plays.
+   iPhones only allow sound and speech that start from a tap, so both are started here, inside the tap. */
+function tvCallTable(k){
+  const T=TV, t=T&&T.tour;if(!t||T.calling!=null)return;
+  const hit=all().find(({m})=>m.table===k&&!m.winner&&!(m.game&&!m.game.done));if(!hit)return;
+  const {m,ri}=hit, line=`${m.a} and ${m.b} are called to ${tname(k)}`;
+  T.calling=k;render();
+  $("tvCall").innerHTML=`<p><b>${esc(m.a)} and ${esc(m.b)}</b> → ${TN(k)}<span>${roundName(ri)} · please come to your table</span></p>`;
+  $("tvCall").hidden=false;clearTimeout(T.callTimer);
+  let over=false;
+  const finish=()=>{if(over)return;over=true;setTimeout(()=>{if(TV===T){T.calling=null;$("tvCall").hidden=true;render()}},800)};
+  freshAudio();croakJingle();
+  const sp=window.speechSynthesis;
+  if(!sp||!window.SpeechSynthesisUtterance){setTimeout(finish,5000);return}
+  try{sp.cancel();const u=new SpeechSynthesisUtterance(" ");u.volume=0;sp.speak(u)}catch(e){} // unlocks speech on iPhone
+  setTimeout(()=>{
+    try{
+      const vs=sp.getVoices(), v=vs.find(v=>/en[-_]GB/i.test(v.lang)&&/female|google uk english female|serena|kate|libby|sonia|hazel|susan|martha|stephanie/i.test(v.name))||vs.find(v=>/en[-_]GB/i.test(v.lang))||vs.find(v=>/^en/i.test(v.lang));
+      const say=(text,last)=>{const u=new SpeechSynthesisUtterance(text);if(v){u.voice=v;u.lang=v.lang}else u.lang="en-GB";u.rate=1.02;u.pitch=1;if(last){u.onend=finish;u.onerror=finish}sp.speak(u)};
+      say(line+" for their match.",false);say("I repeat. "+line+".",true);
+      // Some browsers never fire onend: carry on after a generous estimate
+      setTimeout(finish,(line.length*2+12)*85+3000);
+    }catch(e){finish()}
+  },1800);
+}
+// The call jingle: three croaks rising like a do-mi-sol chime, timed by the sound clock (so they all start from the tap)
+// The call jingle: three croaks that are also notes of a chime, rising C4, G4, E5 (low, middle, high), the last one held
+function croakJingle(){[[262,.34],[392,.34],[659,.7]].forEach(([f,d],i)=>croakNote(i*.4,f,d))}
+const MEGAPHONE='<svg viewBox="0 0 24 24" width="1.3em" height="1.3em" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10v4a1 1 0 0 0 1 1h3l6 4V5L7 9H4a1 1 0 0 0-1 1z" fill="currentColor"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19.5 5.5a9 9 0 0 1 0 13"/></svg>';
 // Everything stays on one screen: shrink the text of a side until it fits (no scrolling on a TV)
 function fitTV(){
   for(const el of document.querySelectorAll(".tvgames,.tvboard")){
@@ -959,6 +1062,12 @@ function renderGame(){
   $("pad").hidden=watch;$("undoBtn").hidden=watch;
   if(watch){$("msg").textContent=S.live.status==="ended"?"The tournament has ended.":"Watching: the scores come from the phone at the table.";$("msg").className="msg"}
   $("board").innerHTML=columns(false);
+  // Practice games can be shown on a big screen (online only)
+  const canScreen=NET.on&&!isTour();
+  $("screenBtn").hidden=!canScreen||!!S.screenOpen;
+  $("screenBtn").textContent=S.screen?"Big screen on: show its link":"Show on a big screen";
+  $("screenBox").hidden=!canScreen||!S.screenOpen||!S.screen;
+  if(!$("screenBox").hidden){const u=svUrl(S.screen.code);$("screenLink").value=u;$("screenCode").textContent=S.screen.code;drawQr(u,"screenQr")}
   const bw=$("board").parentElement;bw.scrollTop=bw.scrollHeight;
 }
 // On the game screen of a live table: say when scores are waiting for a signal
@@ -978,18 +1087,67 @@ function celebrate(key){
   if(soundOn())croak();
 }
 const soundOn=()=>{try{return localStorage.getItem("toads31.sound")==="on"}catch(e){return false}};
-// A short two-note croak, made on the phone (no sound file)
-function croak(){
-  try{
-    const A=window.AudioContext||window.webkitAudioContext;if(!A)return;
-    const ctx=croak.ctx||(croak.ctx=new A()), t=ctx.currentTime;
-    for(const [at,f] of [[0,150],[.22,120]]){
-      const o=ctx.createOscillator(), g=ctx.createGain();
-      o.type="sawtooth";o.frequency.setValueAtTime(f*1.4,t+at);o.frequency.exponentialRampToValueAtTime(f,t+at+.16);
-      g.gain.setValueAtTime(.0001,t+at);g.gain.exponentialRampToValueAtTime(.25,t+at+.02);g.gain.exponentialRampToValueAtTime(.0001,t+at+.18);
-      o.connect(g).connect(ctx.destination);o.start(t+at);o.stop(t+at+.2);
+/* A toad's croak, built on the phone (no sound file): two bursts of rasping pulses, a short "crr" then a longer,
+   falling "oak". Each pulse is a quick knock that rings at two throat resonances (high enough to sound like a frog), about 75 pulses a second. */
+function croakSamples(sr){
+  const out=new Float32Array(Math.ceil(sr*.5));
+  let seed=7;const rnd=()=>((seed=seed*16807%2147483647)/2147483647)*2-1;
+  // start, end (s), pulse rate from → to (per s), first and second resonance (Hz)
+  for(const [a,b,r0,r1,f1,f2] of [[0,.09,82,76,950,2500],[.13,.4,76,58,880,2200]]){
+    for(let t=a;t<b;){
+      const p=(t-a)/(b-a), env=Math.min(1,.15+(t-a)/.02,(b-t)/.06), k1=f1*(1-.2*p), k2=f2*(1-.15*p), i0=Math.floor(t*sr);
+      for(let i=0;i<sr*.03&&i0+i<out.length;i++){
+        const x=i/sr;
+        out[i0+i]+=env*(Math.sin(2*Math.PI*k1*x)*Math.exp(-x/.0045)+.6*Math.sin(2*Math.PI*k2*x)*Math.exp(-x/.0022)+.2*rnd()*Math.exp(-x/.002));
+      }
+      t+=(1+.07*rnd())/(r0+(r1-r0)*p);
     }
-  }catch(e){}
+  }
+  let top=0;for(const v of out)top=Math.max(top,Math.abs(v));
+  for(let i=0;i<out.length;i++)out[i]*=.85/top;
+  return out;
+}
+// On iPhone, once the voice has spoken, the page's sound clock can stay silent (it says "running" or "interrupted"
+// but plays nothing). A call is always a tap, so each call closes the old clock and starts a new one.
+function freshAudio(){const c=croak.ctx;croak.ctx=null;try{c&&c.close().catch(()=>{})}catch(e){}}
+// One sound clock for the page. On iPhone it starts paused until a tap, and "playback" lets it play with the ringer off.
+function audioCtx(){
+  const A=window.AudioContext||window.webkitAudioContext;if(!A)return null;
+  try{if(navigator.audioSession)navigator.audioSession.type="playback"}catch(e){}
+  const ctx=croak.ctx||(croak.ctx=new A());
+  if(ctx.state!=="running")ctx.resume().catch(()=>{});
+  return ctx;
+}
+// A croak you can sing: the frog's rasp (pulses about 55 a second) ringing at the note's pitch, over a soft held tone
+// of the same note, with a little frog-like dip in pitch at the end
+function croakNoteSamples(sr,f,dur){
+  const out=new Float32Array(Math.ceil(sr*(dur+.05)));
+  let seed=11, ph=0, next=0;const rnd=()=>((seed=seed*16807%2147483647)/2147483647)*2-1;
+  const pitch=t=>f*(1-.06*Math.max(0,(t/dur-.75)/.25));
+  for(let i=0;i<out.length;i++){
+    const t=i/sr, env=Math.max(0,Math.min(1,t/.015,(dur-t)/(dur*.3)));
+    ph+=2*Math.PI*pitch(t)/sr;
+    out[i]+=env*(.45*Math.sin(ph)+.12*Math.sin(2*ph));
+    if(t>=next&&t<dur){ // a pulse of the rasp
+      const k=pitch(t);
+      for(let j=0;j<sr*.025&&i+j<out.length;j++){const x=j/sr;out[i+j]+=env*(Math.sin(2*Math.PI*k*x)*Math.exp(-x/.009)+.4*Math.sin(4*Math.PI*k*x)*Math.exp(-x/.005)+.12*rnd()*Math.exp(-x/.0015))}
+      next=t+(1+.05*rnd())/55;
+    }
+  }
+  let top=0;for(const v of out)top=Math.max(top,Math.abs(v));
+  for(let i=0;i<out.length;i++)out[i]*=.8/top;
+  return out;
+}
+function playBuf(ctx,data,at){
+  const b=ctx.createBuffer(1,data.length,ctx.sampleRate);b.getChannelData(0).set(data);
+  const src=ctx.createBufferSource(), g=ctx.createGain();
+  src.buffer=b;g.gain.value=.9;src.connect(g).connect(ctx.destination);src.start(ctx.currentTime+at);
+}
+function croak(at=0){
+  try{const ctx=audioCtx();if(!ctx)return;if(!croak.data||croak.sr!==ctx.sampleRate){croak.data=croakSamples(ctx.sampleRate);croak.sr=ctx.sampleRate}playBuf(ctx,croak.data,at)}catch(e){}
+}
+function croakNote(at,f,dur){
+  try{const ctx=audioCtx();if(!ctx)return;const c=croakNote.c||(croakNote.c={}), key=f+"/"+dur+"/"+ctx.sampleRate;playBuf(ctx,c[key]||(c[key]=croakNoteSamples(ctx.sampleRate,f,dur)),at)}catch(e){}
 }
 function renderWin(){
   const g=G(), L=S.last||{name:g.gp[g.rem.indexOf(0)]||g.gp[0]}, m=M();
@@ -1054,14 +1212,14 @@ function tally(n){
 const ringIf=n=>n>0&&n<=8?`<span class="ring" title="Can win this turn">${n}</span>`:n;
 
 // Chalkboard grid: round numbers once on the left, one column per player
-function columns(final,winner){
-  const g=G(), P=g.gp, idx=P.map((_,i)=>i);
+function columns(final,winner,g=G(),wins=matchWins){
+  const P=g.gp, idx=P.map((_,i)=>i);
   const on=i=>final?i===winner:i===g.cur;
   const cell=(i,cls,html)=>`<div class="c ${cls}${on(i)?" on":""}">${html}</div>`;
   const byRound=idx.map(i=>{const m={};g.hist.forEach(h=>{if(h.p===i)m[h.round]=h});return m});
   const maxR=g.hist.reduce((a,h)=>Math.max(a,h.round),0);
   const head=i=>{
-    let h=esc(P[i])+tally(matchWins(P[i]));
+    let h=esc(P[i])+tally(wins(P[i]));
     if(g.members){const nx=throwerOf(g,i);h+=`<div class="mem">${g.members[P[i]].map(m=>`<span class="${!final&&m===nx?"next":""}">${esc(m)}</span>`).join(" · ")}</div>`}
     return h;
   };
@@ -1446,14 +1604,26 @@ if(NET.on){
   loadLiveList();
   // A tournament link (#t-<code>) opens that tournament; #tv-<code> turns this page into its TV screen
   const openHash=()=>{
-    const tv=/^#tv-([A-Z0-9]{6})$/i.exec(location.hash);
-    if(tv){if(!TV||TV.id!==tv[1].toUpperCase())openTV(tv[1].toUpperCase());return}
+    const tv=/^#tv-([A-Z0-9]{6})$/i.exec(location.hash), sv=/^#sv-([A-Z0-9]{6})$/i.exec(location.hash);
+    if(tv){if(SV)closeSV();if(!TV||TV.id!==tv[1].toUpperCase())openTV(tv[1].toUpperCase());return}
+    if(sv){if(TV)closeTV();if(!SV||SV.code!==sv[1].toUpperCase())openSV(sv[1].toUpperCase());return}
     if(TV)closeTV();
+    if(SV)closeSV();
     const id=liveHash();if(id&&(!S.live||S.live.id!==id))follow(id);
   };
   openHash();window.addEventListener("hashchange",openHash);
   if(S.live&&!liveHash()&&!TV)setHash(S.live.id);
+  $("tvNow").addEventListener("click",e=>{const b=e.target.closest("[data-call]");if(b)tvCallTable(+b.dataset.call)});
+  // Voices load in the background in some browsers: ask early so the first call has them
+  try{window.speechSynthesis&&window.speechSynthesis.getVoices()}catch(e){}
   $("tvSwitch").addEventListener("click",()=>{if(TV){TV.showQuali=!TV.showQuali;render()}});
+  $("svExit").addEventListener("click",()=>{try{history.replaceState(null,"",location.pathname+location.search)}catch(e){}closeSV()});
+  document.addEventListener("visibilitychange",()=>{if(SV&&document.visibilityState==="visible"){keepAwake();svFetch()}});
+  window.addEventListener("resize",()=>{if(SV)fitSV()});
+  $("screenBtn").addEventListener("click",()=>{if(!S.screen){S.screen={code:randCode(6),key:randCode(24)};screenSent=null}S.screenOpen=true;render()});
+  $("screenClose").addEventListener("click",()=>{S.screenOpen=false;render()});
+  $("screenStop").addEventListener("click",()=>{S.screen=null;S.screenOpen=false;screenSent=null;render()});
+  $("screenCopy").addEventListener("click",async()=>{try{await navigator.clipboard.writeText($("screenLink").value);$("screenNote").textContent="Link copied."}catch(e){$("screenLink").select();$("screenNote").textContent="Select the link and copy it."}});
   $("tvExit").addEventListener("click",()=>{try{history.replaceState(null,"",location.pathname+location.search)}catch(e){}closeTV()});
   document.addEventListener("visibilitychange",()=>{if(TV&&document.visibilityState==="visible"){keepAwake();tvFetch(false)}else gameAwake()});
   setInterval(()=>{if(S.live&&document.visibilityState==="visible"){if(S.live.queue.length)liveFlush();else liveFetch(false)}},LIVE_POLL);

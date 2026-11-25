@@ -414,7 +414,7 @@ function renderTV(){
     const side=(name,w)=>{const i=g?g.gp.indexOf(name):-1;return `<div class="tvp${g&&g.cur===i?" up":""}"><span>${esc(name)}</span><i>${w}</i><b>${g?ringIf(g.rem[i]):""}</b></div>`};
     return `<div class="tvtable${g?" playing":""}"><div class="tvtn"><span>${TN(k)}</span><span>${roundName(ri)} · game ${gameNo(m)}</span></div>
       ${side(m.a,m.wa)}${side(m.b,m.wb)}
-      <div class="tvst"><span>${g?`${esc(throwerOf(g,g.cur))} to throw · round ${g.round}`:claimed?"Ready to start":"Ready: scan the code to score this table"}</span>${g?"":`<button type="button" class="tvcallbtn" data-call="${k}"${T.calling!=null?" disabled":""}>${T.calling===k?"Calling…":"Call"}</button>`}</div></div>`;
+      <div class="tvst"><span>${g?`${esc(throwerOf(g,g.cur))} to throw · round ${g.round}`:claimed?"Ready to start":"Ready: scan the code to score this table"}</span>${g?"":`<button type="button" class="tvcallbtn${T.calling===k?" on":""}" data-call="${k}" title="Call the players to this table" aria-label="Call ${esc(m.a)} and ${esc(m.b)} to ${TN(k)}"${T.calling!=null?" disabled":""}>${MEGAPHONE}</button>`}</div></div>`;
   }).join("")||`<p class="tvnone">${t.champion?"All games played.":"No games on the tables right now."}</p>`;
   // Coming up: matches still to be played that have no table yet, earliest round first
   const waiting=list.filter(({m})=>!m.winner&&!m.bye&&m.table==null&&m.a&&m.b), next=waiting.slice(0,6);
@@ -440,8 +440,9 @@ function tvCallOut(on){
   $("tvCall").hidden=false;
   clearTimeout(T.callTimer);T.callTimer=setTimeout(()=>{$("tvCall").hidden=true},12000);
 }
-/* "Call" on a table whose match hasn't started: like an airport call, two croaks, the call said twice
-   ("Al and Bo are called to Garden for their match. I repeat, Al and Bo are called to Garden."), then two croaks. The browser speaks it (no sound file),
+/* The call button (megaphone) on a table whose match hasn't started: like an airport call, a jingle of three croaks rising
+   low, medium, high, then the call said twice
+   ("Al and Bo are called to Garden for their match. I repeat, Al and Bo are called to Garden."). The browser speaks it (no sound file),
    in a British voice where the device has one. The call is also shown on the screen while it plays.
    iPhones only allow sound and speech that start from a tap, so both are started here, inside the tap. */
 function tvCallTable(k){
@@ -452,8 +453,8 @@ function tvCallTable(k){
   $("tvCall").innerHTML=`<p><b>${esc(m.a)} and ${esc(m.b)}</b> → ${TN(k)}<span>${roundName(ri)} · please come to your table</span></p>`;
   $("tvCall").hidden=false;clearTimeout(T.callTimer);
   let over=false;
-  const finish=()=>{if(over)return;over=true;croaks(2);setTimeout(()=>{if(TV===T){T.calling=null;$("tvCall").hidden=true;render()}},1800)};
-  croaks(2);
+  const finish=()=>{if(over)return;over=true;setTimeout(()=>{if(TV===T){T.calling=null;$("tvCall").hidden=true;render()}},800)};
+  croakJingle();
   const sp=window.speechSynthesis;
   if(!sp||!window.SpeechSynthesisUtterance){setTimeout(finish,5000);return}
   try{sp.cancel();const u=new SpeechSynthesisUtterance(" ");u.volume=0;sp.speak(u)}catch(e){} // unlocks speech on iPhone
@@ -465,10 +466,11 @@ function tvCallTable(k){
       // Some browsers never fire onend: carry on after a generous estimate
       setTimeout(finish,(line.length*2+12)*85+3000);
     }catch(e){finish()}
-  },1300);
+  },1500);
 }
-// Croaks in a row, about 0.6 s apart, timed by the sound clock (so they all start from the tap)
-function croaks(n){for(let i=0;i<n;i++)croak(i*.6)}
+// The call jingle: three croaks rising like a do-mi-sol chime, timed by the sound clock (so they all start from the tap)
+function croakJingle(){[.8,1,1.2].forEach((rate,i)=>croak(i*.42,rate))}
+const MEGAPHONE='<svg viewBox="0 0 24 24" width="1.3em" height="1.3em" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10v4a1 1 0 0 0 1 1h3l6 4V5L7 9H4a1 1 0 0 0-1 1z" fill="currentColor"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19.5 5.5a9 9 0 0 1 0 13"/></svg>';
 // Everything stays on one screen: shrink the text of a side until it fits (no scrolling on a TV)
 function fitTV(){
   for(const el of document.querySelectorAll(".tvgames,.tvboard")){
@@ -1035,12 +1037,12 @@ function audioCtx(){
   if(ctx.state!=="running")ctx.resume().catch(()=>{});
   return ctx;
 }
-function croak(at=0){
+function croak(at=0,rate=1){
   try{
     const ctx=audioCtx();if(!ctx)return;
     if(!croak.buf){const d=croakSamples(ctx.sampleRate);croak.buf=ctx.createBuffer(1,d.length,ctx.sampleRate);croak.buf.getChannelData(0).set(d)}
     const src=ctx.createBufferSource(), g=ctx.createGain();
-    src.buffer=croak.buf;g.gain.value=.9;src.connect(g).connect(ctx.destination);src.start(ctx.currentTime+at);
+    src.buffer=croak.buf;src.playbackRate.value=rate;g.gain.value=.9;src.connect(g).connect(ctx.destination);src.start(ctx.currentTime+at);
   }catch(e){}
 }
 function renderWin(){

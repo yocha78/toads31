@@ -466,10 +466,11 @@ function tvCallTable(k){
       // Some browsers never fire onend: carry on after a generous estimate
       setTimeout(finish,(line.length*2+12)*85+3000);
     }catch(e){finish()}
-  },1500);
+  },1800);
 }
 // The call jingle: three croaks rising like a do-mi-sol chime, timed by the sound clock (so they all start from the tap)
-function croakJingle(){[.8,1,1.2].forEach((rate,i)=>croak(i*.42,rate))}
+// The call jingle: three croaks that are also notes of a chime, rising C4, G4, E5 (low, middle, high), the last one held
+function croakJingle(){[[262,.34],[392,.34],[659,.7]].forEach(([f,d],i)=>croakNote(i*.4,f,d))}
 const MEGAPHONE='<svg viewBox="0 0 24 24" width="1.3em" height="1.3em" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10v4a1 1 0 0 0 1 1h3l6 4V5L7 9H4a1 1 0 0 0-1 1z" fill="currentColor"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19.5 5.5a9 9 0 0 1 0 13"/></svg>';
 // Everything stays on one screen: shrink the text of a side until it fits (no scrolling on a TV)
 function fitTV(){
@@ -1037,13 +1038,36 @@ function audioCtx(){
   if(ctx.state!=="running")ctx.resume().catch(()=>{});
   return ctx;
 }
-function croak(at=0,rate=1){
-  try{
-    const ctx=audioCtx();if(!ctx)return;
-    if(!croak.buf){const d=croakSamples(ctx.sampleRate);croak.buf=ctx.createBuffer(1,d.length,ctx.sampleRate);croak.buf.getChannelData(0).set(d)}
-    const src=ctx.createBufferSource(), g=ctx.createGain();
-    src.buffer=croak.buf;src.playbackRate.value=rate;g.gain.value=.9;src.connect(g).connect(ctx.destination);src.start(ctx.currentTime+at);
-  }catch(e){}
+// A croak you can sing: the frog's rasp (pulses about 55 a second) ringing at the note's pitch, over a soft held tone
+// of the same note, with a little frog-like dip in pitch at the end
+function croakNoteSamples(sr,f,dur){
+  const out=new Float32Array(Math.ceil(sr*(dur+.05)));
+  let seed=11, ph=0, next=0;const rnd=()=>((seed=seed*16807%2147483647)/2147483647)*2-1;
+  const pitch=t=>f*(1-.06*Math.max(0,(t/dur-.75)/.25));
+  for(let i=0;i<out.length;i++){
+    const t=i/sr, env=Math.max(0,Math.min(1,t/.015,(dur-t)/(dur*.3)));
+    ph+=2*Math.PI*pitch(t)/sr;
+    out[i]+=env*(.45*Math.sin(ph)+.12*Math.sin(2*ph));
+    if(t>=next&&t<dur){ // a pulse of the rasp
+      const k=pitch(t);
+      for(let j=0;j<sr*.025&&i+j<out.length;j++){const x=j/sr;out[i+j]+=env*(Math.sin(2*Math.PI*k*x)*Math.exp(-x/.009)+.4*Math.sin(4*Math.PI*k*x)*Math.exp(-x/.005)+.12*rnd()*Math.exp(-x/.0015))}
+      next=t+(1+.05*rnd())/55;
+    }
+  }
+  let top=0;for(const v of out)top=Math.max(top,Math.abs(v));
+  for(let i=0;i<out.length;i++)out[i]*=.8/top;
+  return out;
+}
+function playBuf(ctx,data,at){
+  const b=ctx.createBuffer(1,data.length,ctx.sampleRate);b.getChannelData(0).set(data);
+  const src=ctx.createBufferSource(), g=ctx.createGain();
+  src.buffer=b;g.gain.value=.9;src.connect(g).connect(ctx.destination);src.start(ctx.currentTime+at);
+}
+function croak(at=0){
+  try{const ctx=audioCtx();if(!ctx)return;playBuf(ctx,croak.data||(croak.data=croakSamples(ctx.sampleRate)),at)}catch(e){}
+}
+function croakNote(at,f,dur){
+  try{const ctx=audioCtx();if(!ctx)return;const c=croakNote.c||(croakNote.c={}), key=f+"/"+dur;playBuf(ctx,c[key]||(c[key]=croakNoteSamples(ctx.sampleRate,f,dur)),at)}catch(e){}
 }
 function renderWin(){
   const g=G(), L=S.last||{name:g.gp[g.rem.indexOf(0)]||g.gp[0]}, m=M();

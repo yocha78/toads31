@@ -458,3 +458,14 @@ body.tvmode{background:#141a18;color:var(--chalk);overflow:hidden}
 .codebox{border-top:1px solid var(--line);padding-top:14px;margin-top:6px;display:flex;flex-direction:column;gap:8px}
 .codebox p{margin:0}
 #codeInput{text-transform:uppercase;letter-spacing:.12em}
+/* TV: the open table shows its last rounds, chalkboard style, sized with the tile's text */
+.tvdetail{margin-top:.35em;border-top:1px dashed rgba(236,236,228,.3);padding-top:.3em}
+.tvdetail .sheet{grid-template-columns:auto repeat(2,minmax(0,1fr))!important}
+.tvdetail .sheet .n{font-size:.9em}
+.tvdetail .sheet .rem{font-size:1.5em}
+.tvdetail .sheet .k,.tvdetail .sheet .lbl{font-size:.7em}
+.tvdetail .sheet .c{padding:1px 4px}
+.tvdetail .sheet .row{font-size:.85em}
+.tvdetail .sheet .toad{width:1em;height:auto}
+.tvtable.open{border-color:var(--chalk-yellow);background:rgba(242,211,107,.06)}
+@media (prefers-reduced-motion:no-preference){.tvdetail.fresh{animation:callin .35s ease-out}}

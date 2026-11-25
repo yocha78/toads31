@@ -180,7 +180,8 @@ function setResult(tour,r){
   if(!m.a||!m.b)return {error:"this match's players aren't known yet"};
   if(r.winner!==m.a&&r.winner!==m.b)return {error:"the winner must be one of the match's players"};
   const lo=r.winner===m.a?r.wb:r.wa, hi=r.winner===m.a?r.wa:r.wb;
-  if(hi!==TO_WIN||!Number.isInteger(lo)||lo<0||lo>=TO_WIN)return {error:`the winner has ${TO_WIN} games and the loser fewer`};
+  const to=toWin(m);
+  if(hi!==to||!Number.isInteger(lo)||lo<0||lo>=to)return {error:`the winner has ${to} games and the loser fewer`};
   if(m.game&&!m.game.done)return {error:"a game is being played on this match: finish it first",conflict:true};
   const after=allMatches(tour).filter(x=>x.m!==m&&x.m.game&&feedsFrom(tour,x,r.ri,r.mi,{winner:true}));
   if(after.length)return {error:"a game has already started on the back of this result",conflict:true};
@@ -213,13 +214,17 @@ function roundName(tour,ri){
   return fromEnd===0?"Final":fromEnd===1?"Semi-finals":fromEnd===2?"Quarter-finals":`Round ${ri+1}`;
 }
 const gameNo=m=>m.wa+m.wb+1;
+// Games a player needs to win the match: chosen when the match's first game starts (1 to 5), 2 by default
+const toWin=m=>m&&Number.isInteger(m.to)?m.to:TO_WIN;
+// The deciding game: both players one game short of winning the match
+const decider=m=>m.wa===toWin(m)-1&&m.wb===toWin(m)-1;
 
 // A match game has been won by name: keep each player's points and toads (for the qualifying table),
 // add the game to the match score, decide the match at TO_WIN, and move winners on.
 function recordGameWin(tour,m,g,name){
   if(m.games){const per={};for(const h of g.hist){const k=h.who||g.gp[h.p];per[k]=per[k]||{pts:0,toads:0};per[k].pts+=h.s;per[k].toads+=h.c||0}m.games.push(per)}
   if(name===m.a)m.wa++;else m.wb++;
-  if(m.wa>=TO_WIN)m.winner=m.a;else if(m.wb>=TO_WIN)m.winner=m.b;
+  if(m.wa>=toWin(m))m.winner=m.a;else if(m.wb>=toWin(m))m.winner=m.b;
   settle(tour);
 }
 function undoGameWin(tour,m,name){
@@ -228,7 +233,8 @@ function undoGameWin(tour,m,name){
 
 /* ---------- live tournaments (Phase 2) ---------- */
 // One change to a table's match, applied the same way on the scoring phone and on the server.
-//   {t:"start", ri, mi, gameId, order, at}            a new game, players in throwing order
+//   {t:"start", ri, mi, gameId, order, at, to?}       a new game, players in throwing order; to = games to win the
+//                                                     match, only taken with the match's first game
 //   {t:"turn", ri, mi, gameId, expect, id, s, used, at} expect = turns already played, id = the phone's turn id
 //   {t:"undo"|"undoWin", ri, mi, gameId, expect, id}   expect = turns played, id = the last turn's id
 // → {ok:true, turn?, finished?:{winner}, undone?:true} | {ok:true, dup:true} (already applied)
@@ -247,6 +253,8 @@ function applyOp(tour,table,op){
     if(g&&!g.done)return {error:"a game is already being played here",conflict:true};
     const o=op.order;
     if(!Array.isArray(o)||o.length!==2||!o.includes(m.a)||!o.includes(m.b)||o[0]===o[1])return {error:"the order must list the match's two players"};
+    if(op.to!=null&&!(Number.isInteger(op.to)&&op.to>=1&&op.to<=5))return {error:"games to win must be 1 to 5"};
+    if(op.to!=null&&!g&&m.wa+m.wb===0)m.to=op.to;
     m.game=Object.assign(newG(o.slice()),{id:op.gameId,started:op.at||null});
     return {ok:true};
   }
@@ -297,7 +305,7 @@ function gameRecord(g,info){
     turns:g.hist.map(h=>({p:h.p,who:h.who||g.gp[h.p],s:h.s,c:h.c,bust:!!h.bust,before:h.before,round:h.round,at:h.at||null}))};
 }
 
-const Toads={TARGET,TO_WIN,coinsFor,keypad,finishChoices,newG,throwerOf,playTurn,undoTurn,sideStats,playerStats,
+const Toads={TARGET,TO_WIN,toWin,decider,coinsFor,keypad,finishChoices,newG,throwerOf,playTurn,undoTurn,sideStats,playerStats,
   mk,knockSize,seedOrder,qualiPers,buildTour,standings,qualiDone,settle,withdraw,setResult,allMatches,ready,assignTables,roundName,tableOn,tableName,gameNo,recordGameWin,undoGameWin,matchOf,applyOp,gameRecord};
 if(typeof module!=="undefined"&&module.exports)module.exports=Toads;else root.Toads=Toads;
 })(this);

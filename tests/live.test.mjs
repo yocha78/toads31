@@ -25,10 +25,10 @@ const uuid = () => `00000000-0000-4000-8000-${String(++k).padStart(12, "0")}`;
 
 // The ops a scoring phone sends for one whole game on match (ri, mi), where `winner` scores as much as
 // they can and the other player scores 0. Applied to the phone's own copy first, like the app does.
-function gameOps(tour, table, ri, mi, winner) {
+function gameOps(tour, table, ri, mi, winner, to) {
   const m = T.matchOf(tour, ri, mi), gameId = uuid(), ops = [];
   const push = op => { const r = T.applyOp(tour, table, op); assert.ok(r.ok, JSON.stringify(r)); ops.push(op); return r; };
-  push({ t: "start", ri, mi, gameId, order: [m.a, m.b] });
+  push({ t: "start", ri, mi, gameId, order: [m.a, m.b], ...(to != null ? { to } : {}) });
   for (;;) {
     const g = m.game, p = g.cur, left = g.rem[p], c = T.coinsFor(g.hist.length, left);
     const s = g.gp[p] === winner ? Math.min(2 * c, left) : 0;
@@ -234,4 +234,31 @@ test("saved games can't claim to be from a tournament", async () => {
   const rec = { ...T.gameRecord(g, { id: uuid(), mode: "single" }), tournament: { id: "ABCDEF", name: "Fake cup" } };
   assert.equal((await call(h, "POST /games", { body: rec })).status, 201);
   assert.equal((await call(h, "GET /games")).body.games[0].tournament, undefined);
+});
+
+test("applyOp: games to win is chosen with the first game, and only the deciding game is a decider", () => {
+  const tour = T.buildTour(["Al", "Bo"], 1, "knockout");
+  T.settle(tour); T.assignTables(tour);
+  const m = T.matchOf(tour, 0, 0);
+  assert.equal(T.toWin(m), 2, "2 by default");
+  assert.match(T.applyOp(tour, 0, { t: "start", ri: 0, mi: 0, gameId: uuid(), order: [m.a, m.b], to: 9 }).error, /1 to 5/);
+  gameOps(tour, 0, 0, 0, m.a, 3);
+  assert.equal(m.to, 3);
+  gameOps(tour, 0, 0, 0, m.b, 1); // a later game can't change it
+  assert.equal(m.to, 3);
+  gameOps(tour, 0, 0, 0, m.a);
+  gameOps(tour, 0, 0, 0, m.b);
+  assert.deepEqual([m.wa, m.wb, m.winner], [2, 2, null], "2-2 in a first to 3 is not over");
+  assert.ok(T.decider(m), "game 5 decides it");
+  gameOps(tour, 0, 0, 0, m.a);
+  assert.equal(m.winner, m.a);
+  // The organiser's correction follows the match's own count
+  assert.match(T.setResult(tour, { ri: 0, mi: 0, winner: m.a, wa: 2, wb: 0 }).error, /3 games/);
+});
+
+test("decider: 1-1 in a first to 2, never in game 1", () => {
+  assert.ok(T.decider({ wa: 1, wb: 1 }));
+  assert.ok(!T.decider({ wa: 0, wb: 0 }));
+  assert.ok(T.decider({ wa: 0, wb: 0, to: 1 }), "a one-game match is decided by its only game");
+  assert.ok(!T.decider({ wa: 2, wb: 1, to: 3 }));
 });

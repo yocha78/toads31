@@ -168,7 +168,7 @@
         <li>Throw your toads at the table: one <b>in the hole scores 2</b>, one <b>left on the table scores 1</b>, one on the floor scores 0.</li>
         <li>Toads per turn: <b>2</b> in your first turn, <b>3</b> in your second, then <b>4</b> (never more than the points you need).</li>
         <li><b>Bust:</b> score more than you need and your score stays where it was.</li>
-        <li>Before each game everyone throws one toad: closest to the hole throws first. In a tournament, a match is best of 3 (first to 2 games) unless the organiser picks another length.</li>
+        <li>Before each game everyone throws one toad: closest to the hole throws first. In a tournament, a match is best of 3 (first to 2 games), the semi-finals best of 5 and the final best of 7, unless another length is picked when the match starts.</li>
       </ul>
       <p class="hint">Scoring: tap the toad with the points the thrower made. A toad turns brass when that score finishes the game.</p>
     </details>
@@ -367,6 +367,7 @@
           <button class="ghost" id="finishCancel">Wrong score, go back</button>
         </div>
         <div class="actions">
+          <button class="ghost" id="lenBtn" hidden>Change order or match length</button>
           <button class="ghost" id="undoBtn">Undo last turn</button>
           <button class="ghost" id="quitBtn">End game</button>
         </div>
@@ -403,7 +404,7 @@
     <button class="ghost" id="undoWinBtn">Undo winning throw</button>
   </section>
   <p class="hint" id="syncNote" style="text-align:center" aria-live="polite" hidden></p>
-  <p class="hint" id="verLine" style="text-align:center">Version 25 Nov 2026 · Choose best of 3, 5… per match</p>
+  <p class="hint" id="verLine" style="text-align:center">Version 25 Nov 2026 · Semi-finals best of 5, final best of 7</p>
 </div>
 
 <!-- TV SCREEN (#tv-<code>): one tournament for a big screen in the pub -->

@@ -25,7 +25,8 @@ const uuid = () => `00000000-0000-4000-8000-${String(++k).padStart(12, "0")}`;
 
 // The ops a scoring phone sends for one whole game on match (ri, mi), where `winner` scores as much as
 // they can and the other player scores 0. Applied to the phone's own copy first, like the app does.
-function gameOps(tour, table, ri, mi, winner, to) {
+// Matches here are best of 3 (to = 2) unless a test says otherwise.
+function gameOps(tour, table, ri, mi, winner, to = 2) {
   const m = T.matchOf(tour, ri, mi), gameId = uuid(), ops = [];
   const push = op => { const r = T.applyOp(tour, table, op); assert.ok(r.ok, JSON.stringify(r)); ops.push(op); return r; };
   push({ t: "start", ri, mi, gameId, order: [m.a, m.b], ...(to != null ? { to } : {}) });
@@ -254,6 +255,22 @@ test("applyOp: games to win is chosen with the first game, and only the deciding
   assert.equal(m.winner, m.a);
   // The organiser's correction follows the match's own count
   assert.match(T.setResult(tour, { ri: 0, mi: 0, winner: m.a, wa: 2, wb: 0 }).error, /3 games/);
+});
+
+test("applyOp: the final is best of 7 and the semi-finals best of 5 by default; game 1 can restart until someone scores", () => {
+  const tour = T.buildTour(["Al", "Bo", "Cy", "Di"], 2, "knockout");
+  T.settle(tour); T.assignTables(tour);
+  assert.deepEqual([T.defaultToWin(tour, 0), T.defaultToWin(tour, 1), T.defaultToWin(tour, -1)], [3, 4, 2]);
+  assert.equal(T.defaultToWin(T.buildTour(["Al", "Bo", "Cy", "Di", "Ed", "Fy", "Gu", "Ho"], 2, "knockout"), 0), 2, "quarter-finals: best of 3");
+  const m = T.matchOf(tour, 0, 0), start = (to, order = [m.a, m.b]) => T.applyOp(tour, 0, { t: "start", ri: 0, mi: 0, gameId: uuid(), order, ...(to ? { to } : {}) });
+  assert.ok(start().ok);
+  assert.equal(m.to, 3, "a semi-final started without a length is best of 5");
+  assert.ok(start(1, [m.b, m.a]).ok, "nobody has scored: start again with another order and length");
+  assert.deepEqual([m.to, m.game.gp[0]], [1, m.b]);
+  const gid = m.game.id;
+  assert.ok(T.applyOp(tour, 0, { t: "turn", ri: 0, mi: 0, gameId: gid, expect: 0, id: uuid(), s: 0 }).ok);
+  assert.match(start(2).error, /already being played/, "once someone has scored, the game can't restart");
+  assert.equal(m.to, 1);
 });
 
 test("decider: 1-1 in a first to 2, never in game 1", () => {

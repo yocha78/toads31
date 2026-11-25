@@ -361,7 +361,9 @@ body.tvmode{background:#141a18;color:var(--chalk);overflow:hidden}
 .tvp b{font-family:var(--chalk-display);text-align:right}
 .tvp.up span{color:var(--chalk-yellow);text-decoration:underline wavy rgba(242,211,107,.7);text-underline-offset:3px}
 .tvp .ring{display:inline-block;min-width:1.5em;text-align:center;border:2px solid currentColor;border-radius:52% 48% 55% 45% / 50% 55% 45% 50%;transform:rotate(-6deg)}
-.tvst{color:var(--chalk-dim);font-size:.78em}
+.tvst{color:var(--chalk-dim);font-size:.78em;display:flex;align-items:center;justify-content:space-between;gap:.6em}
+.tvcallbtn{font-size:.95em;padding:.15em .9em;min-height:0;background:var(--chalk-yellow);color:#1d2420;border-color:var(--chalk-yellow);font-weight:700;flex:none}
+.tvcallbtn:disabled{opacity:.45}
 .tvnone{color:var(--chalk-dim);margin:0}
 #tvNext{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
 #tvNext li{display:flex;justify-content:space-between;gap:1em;padding:.15em 0;border-bottom:1px dashed rgba(236,236,228,.25);font-size:.9em}

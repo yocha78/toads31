@@ -476,3 +476,5 @@ body.tvmode{background:#141a18;color:var(--chalk);overflow:hidden}
 .towin .seg button small{font-size:.68rem;font-weight:600;text-transform:none}
 .towin .seg button[aria-pressed="true"]{background:var(--brass);border-color:var(--brass);color:var(--brass-ink)}
 .towin p{margin:0;text-align:center}
+#screenArea{display:flex;flex-direction:column;gap:14px}
+#orderView #screenArea{margin-top:6px}

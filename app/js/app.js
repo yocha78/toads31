@@ -438,14 +438,23 @@ function fitSV(){
 }
 
 /* ---------- TV screen (#tv-<code>): tables and what's next on the left, the bracket on the right ---------- */
-let tvTimer=null, wake=null;
+let tvTimer=null, tvSpin=null, wake=null;
+const TV_ROTATE=5000;
+// Open the next table with a game going (nothing moves when only one is playing)
+function tvRotate(){
+  const T=TV;if(!T||!T.tour||document.visibilityState!=="visible")return;
+  const ids=all().filter(({m})=>m.table!=null&&!m.winner&&m.game&&!m.game.done).map(({m})=>m.table).sort((a,b)=>a-b);
+  if(ids.length<2)return;
+  T.openTable=ids[(ids.indexOf(T.openTable)+1)%ids.length];render();
+}
 async function openTV(id){
   TV={id,tour:null};render();
   await tvFetch(true);
   if(!tvTimer)tvTimer=setInterval(()=>{if(TV&&document.visibilityState==="visible")tvFetch(false)},LIVE_POLL);
+  if(!tvSpin)tvSpin=setInterval(tvRotate,TV_ROTATE);
   keepAwake();
 }
-function closeTV(){TV=null;clearInterval(tvTimer);tvTimer=null;try{wake&&wake.release()}catch(e){}wake=null;render()}
+function closeTV(){TV=null;clearInterval(tvTimer);tvTimer=null;clearInterval(tvSpin);tvSpin=null;try{wake&&wake.release()}catch(e){}wake=null;render()}
 // Ask the screen not to go to sleep (where the browser allows it)
 async function keepAwake(){try{if((TV||SV)&&navigator.wakeLock&&document.visibilityState==="visible")wake=await navigator.wakeLock.request("screen")}catch(e){}}
 // The scoring phone stays on during a game (screens otherwise dim and lock between turns)
@@ -481,12 +490,16 @@ function renderTV(){
   Toads.settle(t);
   const list=all(), on=list.filter(({m})=>m.table!=null&&!m.winner).sort((x,y)=>x.m.table-y.m.table);
   tvCallOut(on);
+  // Tables with a game going take turns to open up and show their round-by-round board (TV_ROTATE each)
+  const playing=on.filter(({m})=>m.game&&!m.game.done).map(({m})=>m.table);
+  if(!playing.includes(T.openTable))T.openTable=playing[0];
   $("tvNow").innerHTML=on.map(({m,ri})=>{
     const g=m.game&&!m.game.done?m.game:null, k=m.table, claimed=T.claims&&T.claims[k];
     const side=(name,w)=>{const i=g?g.gp.indexOf(name):-1;return `<div class="tvp${g&&g.cur===i?" up":""}"><span>${esc(name)}</span><i>${w}</i><b>${g?ringIf(g.rem[i]):""}</b></div>`};
-    return `<div class="tvtable${g?" playing":""}"><div class="tvtn"><span>${TN(k)}</span><span>${roundName(ri)} · game ${gameNo(m)}</span></div>
+    const open=g&&k===T.openTable;
+    return `<div class="tvtable${g?" playing":""}${open?" open":""}"><div class="tvtn"><span>${TN(k)}</span><span>${roundName(ri)} · game ${gameNo(m)}</span></div>
       ${side(m.a,m.wa)}${side(m.b,m.wb)}
-      <div class="tvst"><span>${g?`${esc(throwerOf(g,g.cur))} to throw · round ${g.round}`:claimed?"Ready to start":"Ready: scan the code to score this table"}</span>${g?"":`<button type="button" class="tvcallbtn${T.calling===k?" on":""}" data-call="${k}" title="Call the players to this table" aria-label="Call ${esc(m.a)} and ${esc(m.b)} to ${TN(k)}"${T.calling!=null?" disabled":""}>${MEGAPHONE}</button>`}</div></div>`;
+      <div class="tvst"><span>${g?`${esc(throwerOf(g,g.cur))} to throw · round ${g.round}`:claimed?"Ready to start":"Ready: scan the code to score this table"}</span>${g?"":`<button type="button" class="tvcallbtn${T.calling===k?" on":""}" data-call="${k}" title="Call the players to this table" aria-label="Call ${esc(m.a)} and ${esc(m.b)} to ${TN(k)}"${T.calling!=null?" disabled":""}>${MEGAPHONE}</button>`}</div>${open?`<div class="tvdetail">${columns(false,-1,g,()=>0,g.round-3)}</div>`:""}</div>`;
   }).join("")||`<p class="tvnone">${t.champion?"All games played.":"No games on the tables right now."}</p>`;
   // Coming up: matches still to be played that have no table yet, earliest round first
   const waiting=list.filter(({m})=>!m.winner&&!m.bye&&m.table==null&&m.a&&m.b), next=waiting.slice(0,6);
@@ -1213,7 +1226,7 @@ function tally(n){
 const ringIf=n=>n>0&&n<=8?`<span class="ring" title="Can win this turn">${n}</span>`:n;
 
 // Chalkboard grid: round numbers once on the left, one column per player
-function columns(final,winner,g=G(),wins=matchWins){
+function columns(final,winner,g=G(),wins=matchWins,from=1){
   const P=g.gp, idx=P.map((_,i)=>i);
   const on=i=>final?i===winner:i===g.cur;
   const cell=(i,cls,html)=>`<div class="c ${cls}${on(i)?" on":""}">${html}</div>`;
@@ -1228,8 +1241,8 @@ function columns(final,winner,g=G(),wins=matchWins){
   s+=`<div class="k"></div>`+idx.map(i=>cell(i,"rem",ringIf(g.rem[i]))).join("");
   s+=`<div class="k"></div>`+idx.map(i=>cell(i,"lbl","left")).join("");
   s+=`<div class="k"></div>`+idx.map(i=>cell(i,"barc",`<div class="bar"><i style="width:${(TARGET-g.rem[i])/TARGET*100}%"></i></div>`)).join("");
-  for(let r=1;r<=maxR;r++){
-    const f=r===1?" first":"";
+  for(let r=Math.max(1,from);r<=maxR;r++){
+    const f=r===Math.max(1,from)?" first":"";
     s+=`<div class="k${f}">R${r}</div>`+idx.map(i=>{
       const h=byRound[i][r];
       return cell(i,"cell"+f,h?`<div class="row"><span class="sc"><span class="${h.bust?"bust":""}">${h.s}</span>${TOAD}</span><b>${ringIf(h.bust?h.before:h.before-h.s)}</b></div>`:"&nbsp;");

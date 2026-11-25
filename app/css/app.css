@@ -455,3 +455,6 @@ body.tvmode{background:#141a18;color:var(--chalk);overflow:hidden}
 .svturn .svwin .toad{width:1.6em;height:auto}
 .svboard{flex:1;min-height:0;overflow:hidden;display:flex;justify-content:center;align-items:flex-start;border-width:clamp(6px,.6vw,14px)}
 .svboard .sheet{transform-origin:top center}
+.codebox{border-top:1px solid var(--line);padding-top:14px;margin-top:6px;display:flex;flex-direction:column;gap:8px}
+.codebox p{margin:0}
+#codeInput{text-transform:uppercase;letter-spacing:.12em}

@@ -375,7 +375,14 @@ let SV=null, svTimer=null, screenSent=null, screenBusy=false, screenRetry=null;
 const svUrl=code=>location.origin+location.pathname+"#sv-"+code;
 const randCode=n=>{const A="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";return Array.from(crypto.getRandomValues(new Uint8Array(n)),x=>A[x%A.length]).join("")};
 function screenSnapshot(){
-  const g=S.g;if(!g||isTour()||!["game","win"].includes(S.stage))return null;
+  if(isTour())return null;
+  // Choosing the throwing order: the big screen shows the sides and the order so far
+  if(S.stage==="order"&&S.ord){
+    const o=S.ord, members=S.mode==="duo"?Object.fromEntries(S.teams.filter(t=>o.pending.includes(t.name.trim())).map(t=>[t.name.trim(),[t.a,t.b]])):null;
+    return {gp:o.pending,rem:o.pending.map(()=>TARGET),cur:0,round:1,hist:[],done:false,winner:null,picking:o.order.slice(),
+      ...(members&&Object.keys(members).length===o.pending.length?{members}:{}),wins:Object.fromEntries(o.pending.map(n=>[n,matchWins(n)]).filter(([,w])=>w>0))};
+  }
+  const g=S.g;if(!g||!["game","win"].includes(S.stage))return null;
   const win=g.done&&S.last&&g.gp.includes(S.last.name)?S.last.name:null;
   return {gp:g.gp,rem:g.rem,cur:g.cur,round:g.round,done:!!g.done,winner:win,...(g.members?{members:g.members}:{}),
     hist:g.hist.slice(-600).map(({p,s,before,round,bust,who,c})=>({p,s,before,round,bust,who,c})),
@@ -419,6 +426,15 @@ function renderSV(){
   $("svMain").hidden=!g;
   $("svInfo").textContent=g?[g.members?"Duo game":"Practice game",`code ${V.code}`,g.done?"Finished":`Round ${g.round}`,V.offline?"no signal, last scores shown":null].filter(Boolean).join(" · "):"";
   if(!g)return;
+  if(g.picking){
+    $("svInfo").textContent=[g.members?"Duo game":"Practice game",`code ${V.code}`,"Next game",V.offline?"no signal":null].filter(Boolean).join(" · ");
+    const left=g.gp.filter(n=>!g.picking.includes(n));
+    $("svTurn").innerHTML=`<b>Throwing order</b><span>${left.length?"Each throws one toad: closest to the hole throws first":"Ready to start"}</span>`;
+    $("svBoard").innerHTML=`<ol class="svorder">${g.gp.map((_,i)=>{const n=g.picking[i];
+      return `<li class="${n?"":"wait"}"><span class="num">${i+1}</span><span class="nm">${n?esc(n):"?"}</span>${n&&g.members?`<span class="mem">${g.members[n].map(esc).join(" · ")}</span>`:""}${n&&g.wins[n]?`<span class="wins">${g.wins[n]} won</span>`:""}</li>`}).join("")}</ol>`+
+      (left.length?`<p class="svleft">Still to throw: ${left.map(esc).join(", ")}</p>`:"");
+    fitSV();return;
+  }
   if(g.done&&g.winner)$("svTurn").innerHTML=`<div class="svwin">${TOAD}<b>${esc(g.winner)} wins!</b>${TOAD}</div>`;
   else{
     const r=g.rem[g.cur], c=coinsFor(g.hist.length,r), last=g.hist[g.hist.length-1];

@@ -414,7 +414,7 @@ function renderTV(){
     const side=(name,w)=>{const i=g?g.gp.indexOf(name):-1;return `<div class="tvp${g&&g.cur===i?" up":""}"><span>${esc(name)}</span><i>${w}</i><b>${g?ringIf(g.rem[i]):""}</b></div>`};
     return `<div class="tvtable${g?" playing":""}"><div class="tvtn"><span>${TN(k)}</span><span>${roundName(ri)} · game ${gameNo(m)}</span></div>
       ${side(m.a,m.wa)}${side(m.b,m.wb)}
-      <div class="tvst">${g?`${esc(throwerOf(g,g.cur))} to throw · round ${g.round}`:claimed?"Ready to start":"Ready: scan the code to score this table"}</div></div>`;
+      <div class="tvst"><span>${g?`${esc(throwerOf(g,g.cur))} to throw · round ${g.round}`:claimed?"Ready to start":"Ready: scan the code to score this table"}</span>${g?"":`<button type="button" class="tvcallbtn" data-call="${k}"${T.calling!=null?" disabled":""}>${T.calling===k?"Calling…":"Call"}</button>`}</div></div>`;
   }).join("")||`<p class="tvnone">${t.champion?"All games played.":"No games on the tables right now."}</p>`;
   // Coming up: matches still to be played that have no table yet, earliest round first
   const waiting=list.filter(({m})=>!m.winner&&!m.bye&&m.table==null&&m.a&&m.b), next=waiting.slice(0,6);
@@ -440,6 +440,34 @@ function tvCallOut(on){
   $("tvCall").hidden=false;
   clearTimeout(T.callTimer);T.callTimer=setTimeout(()=>{$("tvCall").hidden=true},12000);
 }
+/* "Call" on a table whose match hasn't started: like an airport call, three croaks, the call said twice
+   ("Al and Bo are called at table Garden. I repeat, ..."), then three croaks. The browser speaks it (no sound file),
+   in a British voice where the device has one. The call is also shown on the screen while it plays. */
+function tvCallTable(k){
+  const T=TV, t=T&&T.tour;if(!t||T.calling!=null)return;
+  const hit=all().find(({m})=>m.table===k&&!m.winner&&!(m.game&&!m.game.done));if(!hit)return;
+  const {m,ri}=hit, line=`${m.a} and ${m.b} are called at table ${tname(k)}`;
+  T.calling=k;render();
+  $("tvCall").innerHTML=`<p><b>${esc(m.a)} and ${esc(m.b)}</b> → ${TN(k)}<span>${roundName(ri)} · please come to your table</span></p>`;
+  $("tvCall").hidden=false;clearTimeout(T.callTimer);
+  let over=false;
+  const finish=()=>{if(over)return;over=true;croaks(3);setTimeout(()=>{if(TV===T){T.calling=null;$("tvCall").hidden=true;render()}},2200)};
+  croaks(3);
+  setTimeout(()=>{
+    const sp=window.speechSynthesis;
+    if(!sp||!window.SpeechSynthesisUtterance){setTimeout(finish,6000);return}
+    try{
+      sp.cancel();
+      const vs=sp.getVoices(), v=vs.find(v=>/en[-_]GB/i.test(v.lang)&&/female|google uk english female|serena|kate|libby|sonia|hazel|susan/i.test(v.name))||vs.find(v=>/en[-_]GB/i.test(v.lang))||vs.find(v=>/^en/i.test(v.lang));
+      const say=(text,last)=>{const u=new SpeechSynthesisUtterance(text);if(v){u.voice=v;u.lang=v.lang}else u.lang="en-GB";u.rate=.88;u.pitch=1;if(last){u.onend=finish;u.onerror=finish}sp.speak(u)};
+      say(line+".",false);say("I repeat. "+line+".",true);
+      // Some browsers never fire onend: carry on after a generous estimate
+      setTimeout(finish,(line.length*2+12)*95+4000);
+    }catch(e){finish()}
+  },1900);
+}
+// Three croaks in a row, about half a second apart
+function croaks(n){for(let i=0;i<n;i++)setTimeout(croak,i*560)}
 // Everything stays on one screen: shrink the text of a side until it fits (no scrolling on a TV)
 function fitTV(){
   for(const el of document.querySelectorAll(".tvgames,.tvboard")){
@@ -1453,6 +1481,9 @@ if(NET.on){
   };
   openHash();window.addEventListener("hashchange",openHash);
   if(S.live&&!liveHash()&&!TV)setHash(S.live.id);
+  $("tvNow").addEventListener("click",e=>{const b=e.target.closest("[data-call]");if(b)tvCallTable(+b.dataset.call)});
+  // Voices load in the background in some browsers: ask early so the first call has them
+  try{window.speechSynthesis&&window.speechSynthesis.getVoices()}catch(e){}
   $("tvSwitch").addEventListener("click",()=>{if(TV){TV.showQuali=!TV.showQuali;render()}});
   $("tvExit").addEventListener("click",()=>{try{history.replaceState(null,"",location.pathname+location.search)}catch(e){}closeTV()});
   document.addEventListener("visibilitychange",()=>{if(TV&&document.visibilityState==="visible"){keepAwake();tvFetch(false)}else gameAwake()});

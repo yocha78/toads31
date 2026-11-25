@@ -40,7 +40,14 @@ export function checkScreenGame(input) {
   if (g.wins != null && typeof g.wins === "object") for (const s of gp) if (isInt(g.wins[s], 1, 999)) wins[s] = g.wins[s];
   const winner = g.winner == null ? null : gp.includes(g.winner) ? g.winner : undefined;
   if (winner === undefined) return { error: "winner is not valid" };
-  return { game: { gp, rem: g.rem.slice(), cur: g.cur, round: g.round, hist, ...(members ? { members } : {}), wins, done: !!g.done, winner } };
+  // Before the game: the throwing order being picked on the phone (sides so far, closest first)
+  let picking;
+  if (g.picking != null) {
+    if (!Array.isArray(g.picking) || g.picking.length > gp.length) return { error: "picking is not valid" };
+    picking = g.picking.map(n => cleanName(n, 24));
+    if (picking.some(n => !gp.includes(n)) || new Set(picking).size !== picking.length) return { error: "picking is not valid" };
+  }
+  return { game: { gp, rem: g.rem.slice(), cur: g.cur, round: g.round, hist, ...(members ? { members } : {}), ...(picking ? { picking } : {}), wins, done: !!g.done, winner } };
 }
 
 // → {status, body}

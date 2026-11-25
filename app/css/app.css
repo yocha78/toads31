@@ -487,3 +487,12 @@ body.tvmode{background:#141a18;color:var(--chalk);overflow:hidden}
 #screenArea{display:flex;flex-direction:column;gap:14px}
 #orderView #screenArea{margin-top:6px}
 .tapwait #pad button,.tapwait #undoBtn{opacity:.45;pointer-events:none;transition:opacity .1s}
+.svorder{list-style:none;margin:auto;padding:0;display:flex;flex-direction:column;gap:.5em;font-size:clamp(28px,4.2vw,72px);color:var(--chalk);font-family:var(--chalk-font);width:min(90%,22em)}
+.svorder li{display:flex;align-items:baseline;gap:.6em;padding:.15em .5em;border-bottom:2px dashed var(--chalk-dim)}
+.svorder .num{font-family:var(--chalk-display);color:var(--chalk-yellow);min-width:1.2em}
+.svorder .nm{font-family:var(--chalk-display)}
+.svorder li.wait .nm{color:var(--chalk-dim)}
+.svorder .mem,.svorder .wins{font-size:.45em;color:var(--chalk-dim)}
+.svorder .wins{margin-left:auto}
+.svboard:has(.svorder){flex-direction:column;align-items:center}
+.svleft{color:var(--chalk-dim);font-family:var(--chalk-font);font-size:clamp(18px,2vw,34px);text-align:center;margin:.6em 0 0}

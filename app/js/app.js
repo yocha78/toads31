@@ -440,18 +440,18 @@ function fitSV(){
 /* ---------- TV screen (#tv-<code>): tables and what's next on the left, the bracket on the right ---------- */
 let tvTimer=null, tvSpin=null, wake=null;
 const TV_ROTATE=5000;
-// Open the next table with a game going (nothing moves when only one is playing)
+// The open table follows the clock: slot n of TV_ROTATE ms shows playing table n mod count. A redraw (new scores) never
+// moves it, and a doubled or late timer can't skip a table. The timer only redraws at each slot change.
+const tvSlot=()=>Math.floor(Date.now()/TV_ROTATE);
 function tvRotate(){
   const T=TV;if(!T||!T.tour||document.visibilityState!=="visible")return;
-  const ids=all().filter(({m})=>m.table!=null&&!m.winner&&m.game&&!m.game.done).map(({m})=>m.table).sort((a,b)=>a-b);
-  if(ids.length<2)return;
-  T.openTable=ids[(ids.indexOf(T.openTable)+1)%ids.length];render();
+  if(T.slot!==tvSlot())render();
 }
 async function openTV(id){
   TV={id,tour:null};render();
   await tvFetch(true);
   if(!tvTimer)tvTimer=setInterval(()=>{if(TV&&document.visibilityState==="visible")tvFetch(false)},LIVE_POLL);
-  if(!tvSpin)tvSpin=setInterval(tvRotate,TV_ROTATE);
+  if(!tvSpin)tvSpin=setInterval(tvRotate,500);
   keepAwake();
 }
 function closeTV(){TV=null;clearInterval(tvTimer);tvTimer=null;clearInterval(tvSpin);tvSpin=null;try{wake&&wake.release()}catch(e){}wake=null;render()}
@@ -492,14 +492,16 @@ function renderTV(){
   tvCallOut(on);
   // Tables with a game going take turns to open up and show their round-by-round board (TV_ROTATE each)
   const playing=on.filter(({m})=>m.game&&!m.game.done).map(({m})=>m.table);
-  if(!playing.includes(T.openTable))T.openTable=playing[0];
+  T.slot=tvSlot();
+  const openNow=playing.length?playing[T.slot%playing.length]:null, moved=openNow!==T.openTable;
+  T.openTable=openNow;
   $("tvNow").innerHTML=on.map(({m,ri})=>{
     const g=m.game&&!m.game.done?m.game:null, k=m.table, claimed=T.claims&&T.claims[k];
     const side=(name,w)=>{const i=g?g.gp.indexOf(name):-1;return `<div class="tvp${g&&g.cur===i?" up":""}"><span>${esc(name)}</span><i>${w}</i><b>${g?ringIf(g.rem[i]):""}</b></div>`};
     const open=g&&k===T.openTable;
     return `<div class="tvtable${g?" playing":""}${open?" open":""}"><div class="tvtn"><span>${TN(k)}</span><span>${roundName(ri)} · game ${gameNo(m)}</span></div>
       ${side(m.a,m.wa)}${side(m.b,m.wb)}
-      <div class="tvst"><span>${g?`${esc(throwerOf(g,g.cur))} to throw · round ${g.round}`:claimed?"Ready to start":"Ready: scan the code to score this table"}</span>${g?"":`<button type="button" class="tvcallbtn${T.calling===k?" on":""}" data-call="${k}" title="Call the players to this table" aria-label="Call ${esc(m.a)} and ${esc(m.b)} to ${TN(k)}"${T.calling!=null?" disabled":""}>${MEGAPHONE}</button>`}</div>${open?`<div class="tvdetail">${columns(false,-1,g,()=>0,g.round-3)}</div>`:""}</div>`;
+      <div class="tvst"><span>${g?`${esc(throwerOf(g,g.cur))} to throw · round ${g.round}`:claimed?"Ready to start":"Ready: scan the code to score this table"}</span>${g?"":`<button type="button" class="tvcallbtn${T.calling===k?" on":""}" data-call="${k}" title="Call the players to this table" aria-label="Call ${esc(m.a)} and ${esc(m.b)} to ${TN(k)}"${T.calling!=null?" disabled":""}>${MEGAPHONE}</button>`}</div>${open?`<div class="tvdetail${moved?" fresh":""}">${columns(false,-1,g,()=>0,g.round-3)}</div>`:""}</div>`;
   }).join("")||`<p class="tvnone">${t.champion?"All games played.":"No games on the tables right now."}</p>`;
   // Coming up: matches still to be played that have no table yet, earliest round first
   const waiting=list.filter(({m})=>!m.winner&&!m.bye&&m.table==null&&m.a&&m.b), next=waiting.slice(0,6);

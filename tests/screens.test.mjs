@@ -3,6 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { makeHandler } from "../backend/src/api.mjs";
 import { fakeDb } from "./fake-db.mjs";
+import { checkScreenGame } from "../backend/src/lib/screens.mjs";
 
 const PW = async () => "pw";
 const call = async (h, routeKey, id, body, query) => {
@@ -64,4 +65,12 @@ test("screens: forgotten a day after the last change", async () => {
   assert.equal((await call(h, "GET /screens/{id}", "OLD999")).status, 404);
   // and the code can be used again by anyone
   assert.equal((await call(h, "POST /screens/{id}", "OLD999", { key: "z".repeat(20), game: game() })).body.ver, 1);
+});
+
+test("checkScreenGame: the throwing order being picked is kept, checked against the sides", () => {
+  const base = { gp: ["Al", "Bo", "Cy"], rem: [31, 31, 31], cur: 0, round: 1, hist: [] };
+  assert.deepEqual(checkScreenGame({ ...base, picking: ["Bo"] }).game.picking, ["Bo"]);
+  assert.equal(checkScreenGame(base).game.picking, undefined);
+  assert.match(checkScreenGame({ ...base, picking: ["Zed"] }).error, /picking/);
+  assert.match(checkScreenGame({ ...base, picking: ["Al", "Al"] }).error, /picking/);
 });

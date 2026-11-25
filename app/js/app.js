@@ -140,7 +140,7 @@ function renderDrawPreview(T,n){
   }
 }
 function tourHint(n){
-  const base="Knockout, one against one. First to win 2 games takes the match, and winners meet in the next round.";
+  const base="Knockout, one against one. Matches are best of 3 (first to win 2 games), the semi-finals best of 5 and the final best of 7; the length can be changed when a match starts, and winners meet in the next round.";
   if(n<2)return base;
   const K=knockSize(n);
   if(K===n)return `${base} With ${n} players the draw follows the list: 1 v 2, 3 v 4…`;
@@ -409,7 +409,7 @@ async function svFetch(){
   const was=V.offline;V.offline=!!r.offline;
   if(r.status===200&&r.data&&r.data.screen){Object.assign(V,{game:r.data.screen.game,ver:r.data.screen.ver,error:null});render();return}
   if(r.status===200&&r.data&&r.data.same){if(was)render();return}
-  if(r.status===404){V.game=null;V.error="Waiting for the game. On the phone, start a game and tap “Show on a big screen”."}
+  if(r.status===404){V.game=null;V.error="Waiting for the game. The scores appear here as soon as it starts on the phone."}
   else if(!V.game)V.error=r.offline?"No signal. Trying again…":"Can't reach the scores right now. Trying again…";
   render();
 }
@@ -905,11 +905,11 @@ function liveCard(k,x){
   let main="", extra="";
   if(mine){
     if(x)main=`<button class="${g?"":"primary"}" data-ri="${x.ri}" data-mi="${x.mi}">${g?"Continue":`Start game ${gameNo(x.m)}`}</button>`;
-    extra=`<span>Scored on this phone</span><button type="button" class="link" data-release="${k}">Give up table</button>`;
+    extra=`<span>Scored on this phone</span><button type="button" class="tbtn giveup" data-release="${k}">✋ Give up table</button>`;
   }else{
     if(x&&g)main=`<button data-ri="${x.ri}" data-mi="${x.mi}">Watch</button>`;
     else if(!other&&!ended)main=`<button class="primary" data-claim="${k}">Score this table</button>`;
-    if(other)extra=`<span>Scored on another phone</span>${ended?"":`<button type="button" class="link" data-takeover="${k}">Take over</button>`}${ToadsApi.organiser()?`<button type="button" class="link orgonly" data-release="${k}">Release</button>`:""}`;
+    if(other)extra=`<span>Scored on another phone</span>${ended?"":`<button type="button" class="tbtn takeover" data-takeover="${k}">↻ Take over</button>`}${ToadsApi.organiser()?`<button type="button" class="tbtn giveup orgonly" data-release="${k}">Release</button>`:""}`;
     else if(x&&g&&!ended)extra=`<span>Nobody is scoring it</span><button type="button" class="link" data-claim="${k}">Score this table</button>`;
   }
   return {main,extra:extra?`<div class="tclaim">${extra}</div>`:""};
@@ -959,12 +959,19 @@ function renderOrder(){
     :"Each player throws one toad. Tap the players from closest to the hole to furthest away.";
   $("pickedList").innerHTML=o.pending.map((_,i)=>o.order[i]
     ?`<li><span class="num">${i+1}</span>${esc(o.order[i])}${i===0?' <span class="hint">throws first</span>':""}</li>`
-    :`<li class="slot"><span class="num">${i+1}</span>${i===o.order.length?"Tap the next closest":"&nbsp;"}</li>`).join("");
+    :`<li class="slot"><span class="num">${i+1}</span>${i===o.order.length?"Select closest player below":"&nbsp;"}</li>`).join("");
   $("pickGrid").innerHTML=left.map(p=>`<button data-p="${esc(p)}">${esc(p)}</button>`).join("");
   $("pickGrid").hidden=!left.length;
   $("orderReset").disabled=!o.order.length;
   $("orderGo").disabled=left.length>0;
   $("orderBack").textContent=m?"Back to tables":"Back";
+  // First game of a match: how many games win it (default 2)
+  $("toWinBox").hidden=!(m&&o.to);
+  if(m&&o.to){
+    $("toWinBtns").innerHTML=[1,2,3,4,5].map(n=>`<button type="button" data-to="${n}" aria-pressed="${n===o.to}"><small>Best of</small>${n*2-1}</button>`).join("");
+    $("toWinHint").textContent=o.to===1?"Best of 1: one game decides the match.":`Best of ${o.to*2-1}: first to win ${o.to} games. The order is asked again only for a deciding game.`;
+  }
+  renderScreenArea($("orderView"));
 }
 
 function renderHub(){
@@ -1057,6 +1064,16 @@ function bracketHTML(){
   return `<div class="bracket">${h}</div>`;
 }
 
+// Practice games can be shown on a big screen (online only), from the game screen or the throwing order
+function renderScreenArea(parent){
+  const a=$("screenArea");if(a.parentNode!==parent)parent.appendChild(a);
+  const canScreen=NET.on&&!isTour();
+  a.hidden=!canScreen;
+  $("screenBtn").hidden=!canScreen||!!S.screenOpen;
+  $("screenBtn").textContent=S.screen?"Big screen on: show its link":"Show on a big screen";
+  $("screenBox").hidden=!canScreen||!S.screenOpen||!S.screen;
+  if(!$("screenBox").hidden){const u=svUrl(S.screen.code);$("screenLink").value=u;$("screenCode").textContent=S.screen.code;drawQr(u,"screenQr")}
+}
 function renderGame(){
   const g=G(), r=g.rem[g.cur], m=M();
   $("turnName").textContent=throwerOf(g,g.cur);
@@ -1064,7 +1081,9 @@ function renderGame(){
   const fin=r<=c*2;
   $("turnNeed").innerHTML=esc(`${g.members?g.gp[g.cur]+" · ":""}Needs ${r} · ${c} toad${c>1?"s":""} (max ${c*2}) · Round ${g.round}`)+(fin?` · <span class="canfin">can finish now</span>`:"");
   $("matchInfo").hidden=!m;
-  if(m)$("matchInfo").textContent=`${tname(m.table)} · ${roundName(S.focus.ri)} · Game ${gameNo(m)} · ${m.a} ${m.wa}–${m.wb} ${m.b}`;
+  if(m)$("matchInfo").textContent=`${tname(m.table)} · ${roundName(S.focus.ri)} · Best of ${Toads.toWin(m)*2-1} · Game ${gameNo(m)} · ${m.a} ${m.wa}–${m.wb} ${m.b}`;
+  // Before anyone scores in a match's first game, the order and match length can still be changed
+  $("lenBtn").hidden=!Toads.freshFirst(m);
   $("quitBtn").textContent=m?"Back to tables":"End game";
   $("pad").innerHTML=Toads.keypad(c,r).map(({n,bust})=>`<button data-s="${n}" class="${bust?"over":n===r?"fin":""}" aria-label="Score ${n}${bust?' (bust)':n===r?' (finishes)':''}">${n}</button>`).join("");
   closeFinish();
@@ -1075,15 +1094,10 @@ function renderGame(){
   gameSync();
   // Watching a live table scored on another phone: the board only
   const watch=!scoring();
-  $("pad").hidden=watch;$("undoBtn").hidden=watch;
+  $("pad").hidden=watch;$("undoBtn").hidden=watch;if(watch)$("lenBtn").hidden=true;
   if(watch){$("msg").textContent=S.live.status==="ended"?"The tournament has ended.":"Watching: the scores come from the phone at the table.";$("msg").className="msg"}
   $("board").innerHTML=columns(false);
-  // Practice games can be shown on a big screen (online only)
-  const canScreen=NET.on&&!isTour();
-  $("screenBtn").hidden=!canScreen||!!S.screenOpen;
-  $("screenBtn").textContent=S.screen?"Big screen on: show its link":"Show on a big screen";
-  $("screenBox").hidden=!canScreen||!S.screenOpen||!S.screen;
-  if(!$("screenBox").hidden){const u=svUrl(S.screen.code);$("screenLink").value=u;$("screenCode").textContent=S.screen.code;drawQr(u,"screenQr")}
+  renderScreenArea($("board").closest(".wrap"));
   const bw=$("board").parentElement;bw.scrollTop=bw.scrollHeight;
 }
 // On the game screen of a live table: say when scores are waiting for a signal
@@ -1209,7 +1223,7 @@ function renderWin(){
     B.hidden=true;
   }else{
     $("winLabel").textContent=`Game ${m.wa+m.wb} won`;
-    $("winInfo").textContent=`${m.a} ${m.wa}–${m.wb} ${m.b}. First to 2 games wins the match.`;
+    $("winInfo").textContent=`${m.a} ${m.wa}–${m.wb} ${m.b}. Best of ${Toads.toWin(m)*2-1}: first to ${Toads.toWin(m)} games wins.`+(Toads.decider(m)?" Next game decides it.":"");
     A.textContent=`Start game ${gameNo(m)}`;A.onclick=()=>{S.last=null;nextMatchGame(m)};
     B.textContent="Back to tables";B.onclick=goHub;
   }
@@ -1274,7 +1288,10 @@ function startTournament(){
 // Before every game: one toad each, closest to the hole throws first
 function askOrder(players){
   if(players.length<2){beginGame(players);return}
-  S.ord={pending:players,order:[]};S.stage="order";render();
+  const m=isTour()?M():null;
+  // A match's first game: also choose how many games win the match
+  const first=m&&m.wa+m.wb===0&&(!m.game||Toads.freshFirst(m));
+  S.ord={pending:players,order:[],...(first?{to:Number.isInteger(m.to)?m.to:Toads.defaultToWin(TOUR(),S.focus.ri)}:{})};S.stage="order";render();
 }
 function pick(name){
   const o=S.ord;o.order.push(name);
@@ -1284,7 +1301,7 @@ function pick(name){
 }
 function beginGame(order){
   if(S.live){
-    const m=M(), r=livePlay({t:"start",ri:S.focus.ri,mi:S.focus.mi,gameId:newId(),order:order.slice(),at:Date.now()});
+    const m=M(), to=S.ord&&S.ord.to, r=livePlay({t:"start",ri:S.focus.ri,mi:S.focus.mi,gameId:newId(),order:order.slice(),at:Date.now(),...(to?{to}:{})});
     if(!r.ok){NET.liveNote=`Can't start the game: ${r.error}.`;goHub();return}
     S.ord=null;S.last=null;S.stage="game";$("msg").textContent="";$("quitConfirm").hidden=true;render();return;
   }
@@ -1292,7 +1309,7 @@ function beginGame(order){
   if(S.mode==="duo"&&!isTour())g.members=Object.fromEntries(S.teams.map(t=>[t.name.trim(),[t.a,t.b]]));
   // Online, Single and Duo games are saved: they get an id, a start time and the venue
   if(NET.on&&!isTour()){g.id=newId();g.started=Date.now();g.venue=S.venue||null}
-  if(isTour())M().game=g;else S.g=g;
+  if(isTour()){const m=M();if(S.ord&&S.ord.to&&(!m.game||Toads.freshFirst(m)))m.to=S.ord.to;m.game=g}else S.g=g;
   S.ord=null;S.last=null;S.stage="game";
   $("msg").textContent="";$("quitConfirm").hidden=true;render();
 }
@@ -1302,13 +1319,14 @@ function openMatch(ri,mi){
   else if(S.live&&(!myTable(m.table)||S.live.status==="ended"))goHub();
   else nextMatchGame(m);
 }
-// A match's next game: game 2 swaps game 1's throwing order (no picking); game 1 and game 3 ask for it
+// A match's next game: the first game and the deciding game ask for the throwing order;
+// the games in between swap the previous game's order (no picking)
 function nextMatchGame(m){
   const prev=m.game;
-  if(gameNo(m)===2&&prev&&prev.done&&prev.gp.length===2){
+  if(gameNo(m)>1&&!Toads.decider(m)&&prev&&prev.done&&prev.gp.length===2){
     const order=prev.gp.slice().reverse();
     beginGame(order);
-    if(S.stage==="game"){$("msg").textContent=`Game 2: order swapped, ${order[0]} throws first.`;$("msg").className="msg good"}
+    if(S.stage==="game"){$("msg").textContent=`Game ${gameNo(m)}: order swapped, ${order[0]} throws first.`;$("msg").className="msg good"}
     return;
   }
   askOrder([m.a,m.b]);
@@ -1562,6 +1580,7 @@ $("shuffleBtn").addEventListener("click",()=>{const a=S.players;for(let i=a.leng
 $("startBtn").addEventListener("click",()=>S.mode==="tournament"?(liveCreating()?createLive():startTournament()):(S.tour=null,askOrder(S.mode==="duo"?S.teams.map(t=>t.name.trim()):S.players.slice())));
 $("pickGrid").addEventListener("click",e=>{const b=e.target.closest("button[data-p]");if(b)pick(b.dataset.p)});
 $("orderReset").addEventListener("click",()=>{S.ord.order=[];render()});
+$("toWinBtns").addEventListener("click",e=>{const b=e.target.closest("[data-to]");if(b&&S.ord){S.ord.to=+b.dataset.to;render()}});
 $("orderGo").addEventListener("click",()=>beginGame(S.ord.order.slice()));
 $("orderBack").addEventListener("click",()=>isTour()?goHub():(S.stage="setup",render()));
 $("tableCards").addEventListener("click",e=>{const b=e.target.closest("button[data-ri]");if(b)openMatch(+b.dataset.ri,+b.dataset.mi)});
@@ -1573,10 +1592,19 @@ $("endTourNo").addEventListener("click",()=>{$("endTourConfirm").hidden=true});
 $("endTourYes").addEventListener("click",()=>{S.tour=null;S.stage="setup";render()});
 $("champNew").addEventListener("click",startTournament);
 $("champChange").addEventListener("click",()=>{if(S.live){leaveLive();return}S.tour=null;S.stage="setup";render()});
-$("pad").addEventListener("click",e=>{const b=e.target.closest("button[data-s]");if(b)score(+b.dataset.s)});
+// A short pause after each score or undo, so a double tap can't score twice by mistake
+const TAP_PAUSE=900;let tapUntil=0,tapTimer=null;
+function tapGate(){
+  if(Date.now()<tapUntil)return false;
+  tapUntil=Date.now()+TAP_PAUSE;document.body.classList.add("tapwait");
+  clearTimeout(tapTimer);tapTimer=setTimeout(()=>document.body.classList.remove("tapwait"),TAP_PAUSE);
+  return true;
+}
+$("pad").addEventListener("click",e=>{const b=e.target.closest("button[data-s]");if(b&&tapGate())score(+b.dataset.s)});
 $("finishBtns").addEventListener("click",e=>{const b=e.target.closest("button[data-u]");if(b)score(+$("finishBtns").dataset.s,+b.dataset.u)});
 $("finishCancel").addEventListener("click",closeFinish);
-$("undoBtn").addEventListener("click",()=>{closeFinish();undo()});
+$("undoBtn").addEventListener("click",()=>{if(!tapGate())return;closeFinish();undo()});
+$("lenBtn").addEventListener("click",()=>{const m=M();if(Toads.freshFirst(m)){closeFinish();askOrder([m.a,m.b])}});
 $("undoWinBtn").addEventListener("click",undoWin);
 // In a tournament, leaving a game keeps it on its table to carry on later
 $("quitBtn").addEventListener("click",()=>{if(M())goHub();else $("quitConfirm").hidden=false});

@@ -440,9 +440,10 @@ function tvCallOut(on){
   $("tvCall").hidden=false;
   clearTimeout(T.callTimer);T.callTimer=setTimeout(()=>{$("tvCall").hidden=true},12000);
 }
-/* "Call" on a table whose match hasn't started: like an airport call, three croaks, the call said twice
-   ("Al and Bo are called at table Garden. I repeat, ..."), then three croaks. The browser speaks it (no sound file),
-   in a British voice where the device has one. The call is also shown on the screen while it plays. */
+/* "Call" on a table whose match hasn't started: like an airport call, two croaks, the call said twice
+   ("Al and Bo are called at table Garden. I repeat, ..."), then two croaks. The browser speaks it (no sound file),
+   in a British voice where the device has one. The call is also shown on the screen while it plays.
+   iPhones only allow sound and speech that start from a tap, so both are started here, inside the tap. */
 function tvCallTable(k){
   const T=TV, t=T&&T.tour;if(!t||T.calling!=null)return;
   const hit=all().find(({m})=>m.table===k&&!m.winner&&!(m.game&&!m.game.done));if(!hit)return;
@@ -451,23 +452,23 @@ function tvCallTable(k){
   $("tvCall").innerHTML=`<p><b>${esc(m.a)} and ${esc(m.b)}</b> → ${TN(k)}<span>${roundName(ri)} · please come to your table</span></p>`;
   $("tvCall").hidden=false;clearTimeout(T.callTimer);
   let over=false;
-  const finish=()=>{if(over)return;over=true;croaks(3);setTimeout(()=>{if(TV===T){T.calling=null;$("tvCall").hidden=true;render()}},2200)};
-  croaks(3);
+  const finish=()=>{if(over)return;over=true;croaks(2);setTimeout(()=>{if(TV===T){T.calling=null;$("tvCall").hidden=true;render()}},1800)};
+  croaks(2);
+  const sp=window.speechSynthesis;
+  if(!sp||!window.SpeechSynthesisUtterance){setTimeout(finish,5000);return}
+  try{sp.cancel();const u=new SpeechSynthesisUtterance(" ");u.volume=0;sp.speak(u)}catch(e){} // unlocks speech on iPhone
   setTimeout(()=>{
-    const sp=window.speechSynthesis;
-    if(!sp||!window.SpeechSynthesisUtterance){setTimeout(finish,6000);return}
     try{
-      sp.cancel();
-      const vs=sp.getVoices(), v=vs.find(v=>/en[-_]GB/i.test(v.lang)&&/female|google uk english female|serena|kate|libby|sonia|hazel|susan/i.test(v.name))||vs.find(v=>/en[-_]GB/i.test(v.lang))||vs.find(v=>/^en/i.test(v.lang));
-      const say=(text,last)=>{const u=new SpeechSynthesisUtterance(text);if(v){u.voice=v;u.lang=v.lang}else u.lang="en-GB";u.rate=.88;u.pitch=1;if(last){u.onend=finish;u.onerror=finish}sp.speak(u)};
+      const vs=sp.getVoices(), v=vs.find(v=>/en[-_]GB/i.test(v.lang)&&/female|google uk english female|serena|kate|libby|sonia|hazel|susan|martha|stephanie/i.test(v.name))||vs.find(v=>/en[-_]GB/i.test(v.lang))||vs.find(v=>/^en/i.test(v.lang));
+      const say=(text,last)=>{const u=new SpeechSynthesisUtterance(text);if(v){u.voice=v;u.lang=v.lang}else u.lang="en-GB";u.rate=1.02;u.pitch=1;if(last){u.onend=finish;u.onerror=finish}sp.speak(u)};
       say(line+".",false);say("I repeat. "+line+".",true);
       // Some browsers never fire onend: carry on after a generous estimate
-      setTimeout(finish,(line.length*2+12)*95+4000);
+      setTimeout(finish,(line.length*2+12)*85+3000);
     }catch(e){finish()}
-  },1900);
+  },1300);
 }
-// Three croaks in a row, about half a second apart
-function croaks(n){for(let i=0;i<n;i++)setTimeout(croak,i*560)}
+// Croaks in a row, about 0.6 s apart, timed by the sound clock (so they all start from the tap)
+function croaks(n){for(let i=0;i<n;i++)croak(i*.6)}
 // Everything stays on one screen: shrink the text of a side until it fits (no scrolling on a TV)
 function fitTV(){
   for(const el of document.querySelectorAll(".tvgames,.tvboard")){
@@ -1006,17 +1007,40 @@ function celebrate(key){
   if(soundOn())croak();
 }
 const soundOn=()=>{try{return localStorage.getItem("toads31.sound")==="on"}catch(e){return false}};
-// A short two-note croak, made on the phone (no sound file)
-function croak(){
-  try{
-    const A=window.AudioContext||window.webkitAudioContext;if(!A)return;
-    const ctx=croak.ctx||(croak.ctx=new A()), t=ctx.currentTime;
-    for(const [at,f] of [[0,150],[.22,120]]){
-      const o=ctx.createOscillator(), g=ctx.createGain();
-      o.type="sawtooth";o.frequency.setValueAtTime(f*1.4,t+at);o.frequency.exponentialRampToValueAtTime(f,t+at+.16);
-      g.gain.setValueAtTime(.0001,t+at);g.gain.exponentialRampToValueAtTime(.25,t+at+.02);g.gain.exponentialRampToValueAtTime(.0001,t+at+.18);
-      o.connect(g).connect(ctx.destination);o.start(t+at);o.stop(t+at+.2);
+/* A toad's croak, built on the phone (no sound file): two bursts of rasping pulses, a short "crr" then a longer,
+   falling "oak". Each pulse is a quick knock that rings at two throat resonances, about 50 pulses a second. */
+function croakSamples(sr){
+  const out=new Float32Array(Math.ceil(sr*.5));
+  let seed=7;const rnd=()=>((seed=seed*16807%2147483647)/2147483647)*2-1;
+  // start, end (s), pulse rate from → to (per s), first and second resonance (Hz)
+  for(const [a,b,r0,r1,f1,f2] of [[0,.11,58,52,440,1350],[.15,.43,52,36,400,1080]]){
+    for(let t=a;t<b;){
+      const p=(t-a)/(b-a), env=Math.min(1,.15+(t-a)/.02,(b-t)/.06), k1=f1*(1-.2*p), k2=f2*(1-.15*p), i0=Math.floor(t*sr);
+      for(let i=0;i<sr*.03&&i0+i<out.length;i++){
+        const x=i/sr;
+        out[i0+i]+=env*(Math.sin(2*Math.PI*k1*x)*Math.exp(-x/.007)+.55*Math.sin(2*Math.PI*k2*x)*Math.exp(-x/.0035)+.2*rnd()*Math.exp(-x/.002));
+      }
+      t+=(1+.07*rnd())/(r0+(r1-r0)*p);
     }
+  }
+  let top=0;for(const v of out)top=Math.max(top,Math.abs(v));
+  for(let i=0;i<out.length;i++)out[i]*=.85/top;
+  return out;
+}
+// One sound clock for the page. On iPhone it starts paused until a tap, and "playback" lets it play with the ringer off.
+function audioCtx(){
+  const A=window.AudioContext||window.webkitAudioContext;if(!A)return null;
+  try{if(navigator.audioSession)navigator.audioSession.type="playback"}catch(e){}
+  const ctx=croak.ctx||(croak.ctx=new A());
+  if(ctx.state!=="running")ctx.resume().catch(()=>{});
+  return ctx;
+}
+function croak(at=0){
+  try{
+    const ctx=audioCtx();if(!ctx)return;
+    if(!croak.buf){const d=croakSamples(ctx.sampleRate);croak.buf=ctx.createBuffer(1,d.length,ctx.sampleRate);croak.buf.getChannelData(0).set(d)}
+    const src=ctx.createBufferSource(), g=ctx.createGain();
+    src.buffer=croak.buf;g.gain.value=.9;src.connect(g).connect(ctx.destination);src.start(ctx.currentTime+at);
   }catch(e){}
 }
 function renderWin(){

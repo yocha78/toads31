@@ -146,6 +146,15 @@
     </details>
     <button class="ghost" id="shuffleBtn" hidden>Shuffle the draw</button>
     <button class="primary big" id="startBtn" disabled>Start game</button>
+    <form class="codebox" id="codeForm" hidden>
+      <h2><label for="codeInput">Show a game on this screen</label></h2>
+      <p class="hint">On a TV, laptop or tablet: type the code shown on the scoring phone (a practice game or a tournament).</p>
+      <div class="row">
+        <input type="text" id="codeInput" placeholder="Code, e.g. 8F9R85" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false">
+        <button class="primary" type="submit">Show</button>
+      </div>
+      <p class="msg" id="codeMsg" aria-live="polite"></p>
+    </form>
   </section>
 
   <!-- MENU (online only) -->
@@ -389,7 +398,7 @@
     <button class="ghost" id="undoWinBtn">Undo winning throw</button>
   </section>
   <p class="hint" id="syncNote" style="text-align:center" aria-live="polite" hidden></p>
-  <p class="hint" id="verLine" style="text-align:center">Version 25 Nov 2026 · Big screen button at the bottom, with a game code</p>
+  <p class="hint" id="verLine" style="text-align:center">Version 25 Nov 2026 · Type a code to show a game on a TV</p>
 </div>
 
 <!-- TV SCREEN (#tv-<code>): one tournament for a big screen in the pub -->

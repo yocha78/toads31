@@ -347,7 +347,7 @@ a.btn:focus-visible{outline:3px solid var(--brass);outline-offset:2px}
 /* TV screen: a big chalkboard for the pub, all on one screen (fitTV shrinks a side whose text doesn't fit).
    Same look in light and dark. Sizes inside are in em so they shrink together. */
 body.tvmode{background:#141a18;color:var(--chalk);overflow:hidden}
-.tv{height:100vh;height:100dvh;display:grid;grid-template-rows:auto minmax(0,1fr) auto;gap:1.2vh;padding:1.6vh 1.6vw;font-size:clamp(13px,1.15vw,28px);font-family:var(--chalk-font);color:var(--chalk);overflow:hidden}
+.tv{height:100vh;height:100dvh;display:grid;grid-template-rows:auto minmax(0,1fr);gap:1.2vh;padding:1.6vh 1.6vw;font-size:clamp(13px,1.15vw,28px);font-family:var(--chalk-font);color:var(--chalk);overflow:hidden}
 .tvhead{display:flex;align-items:baseline;gap:1.2em;min-width:0}
 .tvhead h1{font-family:var(--display);font-size:2em;color:var(--chalk);overflow-wrap:anywhere;min-width:0;line-height:1.1}
 .tvinfo{color:var(--chalk-dim);font-size:1.05em;flex:1}
@@ -400,11 +400,6 @@ body.tvmode{background:#141a18;color:var(--chalk);overflow:hidden}
 .tvchamp .toad{width:2.6em;height:2.2em}
 .tvchamp span{display:block;color:var(--chalk-dim)}
 .tvchamp b{font-family:var(--chalk-display);font-size:2em;color:var(--chalk-yellow);line-height:1}
-.tvfoot{display:flex;align-items:center;gap:1em}
-.tvfoot .qr{width:clamp(64px,10vh,150px);flex:none;padding:0}
-.tvfoot b{display:block;font-family:var(--chalk-display);font-size:1.3em;color:var(--chalk)}
-.tvfoot span{color:var(--chalk-dim)}
-.tvfoot .tvlink{display:block;color:var(--chalk);overflow-wrap:anywhere}
 @media (max-width:760px),(orientation:portrait) and (max-width:1100px){
   body.tvmode{overflow:auto}
   .tv{height:auto;min-height:100vh;font-size:15px;padding:14px;gap:12px;overflow:visible}
@@ -510,3 +505,23 @@ body.tvmode{background:#141a18;color:var(--chalk);overflow:hidden}
 .scorepop .rest{font-family:var(--chalk-font);font-size:1.7rem;margin-top:8px}
 .scorepop .rest b{font-family:var(--chalk-display);font-size:2.4em;color:#fff;vertical-align:-.12em}
 @keyframes popin{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}
+.onlybar{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:8px}
+.onlybar h2{font-size:1.4rem;margin:0;white-space:nowrap}
+.onlybar .link{border:0;background:none;padding:2px 0;min-height:0;text-decoration:underline;color:var(--ink);font-size:.9rem}
+.tcard > button.big{font-size:1.2rem;padding:16px;grid-column:1 / -1;grid-row:auto;margin-top:10px;white-space:normal}
+.printsheet{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-top:12px}
+.printcard{border:2px dashed #999;border-radius:12px;padding:16px;text-align:center;background:#fff;color:#111;break-inside:avoid;page-break-inside:avoid}
+.printcard h3{font-family:var(--display);font-size:1.9rem;margin:0 0 2px;color:#111}
+.printcard .tour{font-size:.9rem;color:#555;margin:0 0 8px}
+.printcard .qr{width:78%;margin:0 auto;padding:0;background:#fff}
+.printcard .qr svg{width:100%;height:auto;display:block}
+.printcard b{display:block;font-size:1.15rem;margin-top:8px}
+.printcard .url{font-size:.78rem;color:#333;overflow-wrap:anywhere;margin-top:4px}
+@media print{
+  @page{margin:12mm}
+  body{background:#fff!important}
+  body *{visibility:hidden}
+  #printSheet,#printSheet *{visibility:visible}
+  #printSheet{position:absolute;left:0;top:0;width:100%;grid-template-columns:1fr 1fr;gap:10mm;margin:0}
+  .printcard{border-color:#888}
+}

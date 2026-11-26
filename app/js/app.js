@@ -46,8 +46,8 @@ function render(){
   document.body.classList.toggle("tvmode",!!(TV||SV));
   if(TV){renderTV();return}
   if(SV){renderSV();return}
-  for(const id of["setup","orderView","bracketView","game","win","playersView","statsView","menuView","toursView","venuesView"])$(id).hidden=true;
-  const views={setup:["setup",renderSetup],menu:["menuView",renderMenu],tours:["toursView",renderTours],players:["playersView",renderPlayers],stats:["statsView",renderStats],venues:["venuesView",renderVenues],order:["orderView",renderOrder],bracket:["bracketView",renderHub],game:["game",renderGame],win:["win",renderWin]};
+  for(const id of["setup","orderView","bracketView","game","win","playersView","statsView","menuView","toursView","venuesView","printView"])$(id).hidden=true;
+  const views={setup:["setup",renderSetup],menu:["menuView",renderMenu],tours:["toursView",renderTours],players:["playersView",renderPlayers],stats:["statsView",renderStats],venues:["venuesView",renderVenues],order:["orderView",renderOrder],print:["printView",renderPrint],bracket:["bracketView",renderHub],game:["game",renderGame],win:["win",renderWin]};
   $("menuBtn").hidden=!NET.on||MENU_STAGES.includes(S.stage);
   // Logged in as organiser: the Menu button says so, and organiser-only buttons carry the same key
   const orgOn=NET.on&&!!ToadsApi.organiser();
@@ -232,7 +232,7 @@ function renderPlayers(){
     :NET.fresh?"No registered players yet. Register players from the setup screen.":"Can't reach the players list right now.";
 }
 // The menu (top right): players & stats, tournaments, and the organiser's login and tidy-up
-const MENU_STAGES=["menu","players","stats","tours","venues"];
+const MENU_STAGES=["menu","players","stats","tours","venues","print"];
 function renderMenu(){
   const org=ToadsApi.organiser();
   $("orgOff").hidden=!!org;$("orgOn").hidden=!org;
@@ -307,7 +307,7 @@ function renderTours(){
       <div class="ti">${t.venue?esc(t.venue)+" · ":""}${fmtDate(t.created)} · ${t.players} players · ${t.tables} table${t.tables===1?"":"s"} · code ${id}</div>
       ${matchPlan(t)}
       <div class="actions"><button type="button" class="primary" data-open>Open</button><a class="btn" href="${esc(tvUrl(t.id))}" target="_blank" rel="noopener">TV screen</a></div>
-      ${org?`<div class="tclaim"><button type="button" class="link" data-act="edit">Edit</button><button type="button" class="link" data-act="restart">Restart</button>${t.status==="live"?`<button type="button" class="link" data-act="end">End</button>`:""}<button type="button" class="link" data-act="delete">Delete</button></div>`:""}
+      ${org?`<div class="tclaim"><button type="button" class="link" data-qrs>Table QR codes</button><button type="button" class="link" data-act="edit">Edit</button><button type="button" class="link" data-act="restart">Restart</button>${t.status==="live"?`<button type="button" class="link" data-act="end">End</button>`:""}<button type="button" class="link" data-act="delete">Delete</button></div>`:""}
       ${extra}</div>`;
   }).join("");
 }
@@ -498,9 +498,6 @@ function renderTV(){
   $("tvMain").hidden=!t;
   $("tvTitle").textContent=t?T.name:"Toads 31";
   $("tvInfo").textContent=t?[T.venue,T.status==="ended"?"Ended":t.champion?"Finished":"Live",T.offline?"no signal, last scores shown":null].filter(Boolean).join(" · "):"";
-  const url=location.origin+location.pathname+"#t-"+T.id;
-  $("tvLink").textContent=url.replace(/^https?:\/\//,"");
-  drawQr(url,"tvQr");
   if(!t)return;
   Toads.settle(t);
   const list=all(), on=list.filter(({m})=>m.table!=null&&!m.winner).sort((x,y)=>x.m.table-y.m.table);
@@ -516,7 +513,7 @@ function renderTV(){
     const open=g&&k===T.openTable;
     return `<div class="tvtable${g?" playing":""}${open?" open":""}"><div class="tvtn"><span>${TN(k)}</span><span>${roundName(ri)} · game ${gameNo(m)}</span></div>
       ${side(m.a,m.wa)}${side(m.b,m.wb)}
-      <div class="tvst"><span>${g?`${esc(throwerOf(g,g.cur))} to throw · round ${g.round}`:claimed?"Ready to start":"Ready: scan the code to score this table"}</span>${g?"":`<button type="button" class="tvcallbtn${T.calling===k?" on":""}" data-call="${k}" title="Call the players to this table" aria-label="Call ${esc(m.a)} and ${esc(m.b)} to ${TN(k)}"${T.calling!=null?" disabled":""}>${MEGAPHONE}</button>`}</div>${open?`<div class="tvdetail${moved?" fresh":""}">${columns(false,-1,g,()=>0,g.round-3)}</div>`:""}</div>`;
+      <div class="tvst"><span>${g?`${esc(throwerOf(g,g.cur))} to throw · round ${g.round}`:claimed?"Ready to start":"Ready: scan the QR code on the table to score it"}</span>${g?"":`<button type="button" class="tvcallbtn${T.calling===k?" on":""}" data-call="${k}" title="Call the players to this table" aria-label="Call ${esc(m.a)} and ${esc(m.b)} to ${TN(k)}"${T.calling!=null?" disabled":""}>${MEGAPHONE}</button>`}</div>${open?`<div class="tvdetail${moved?" fresh":""}">${columns(false,-1,g,()=>0,g.round-3)}</div>`:""}</div>`;
   }).join("")||`<p class="tvnone">${t.champion?"All games played.":"No games on the tables right now."}</p>`;
   // Coming up: matches still to be played that have no table yet, earliest round first
   const waiting=list.filter(({m})=>!m.winner&&!m.bye&&m.table==null&&m.a&&m.b), next=waiting.slice(0,6);
@@ -736,8 +733,11 @@ const LIVE_POLL=4000;
 const liveOn=()=>!!(NET.on&&S.live&&S.live.tour);
 const myTable=k=>!!(S.live&&S.live.mine[k]);
 const scoring=()=>{const m=M();return !S.live||(m&&myTable(m.table))};
-const liveHash=()=>{const h=/^#t-([A-Z0-9]{6})$/i.exec(location.hash);return h?h[1].toUpperCase():null};
-function setHash(id){try{history.replaceState(null,"",location.pathname+location.search+(id?"#t-"+id:""))}catch(e){}}
+// #t-<code> follows a tournament; #t-<code>-<n> (the QR code on table n) opens that table's own screen
+const liveHash=()=>{const h=/^#t-([A-Z0-9]{6})(?:-\d{1,2})?$/i.exec(location.hash);return h?h[1].toUpperCase():null};
+const hashTable=()=>{const h=/^#t-[A-Z0-9]{6}-(\d{1,2})$/i.exec(location.hash);return h?+h[1]-1:null};
+const tableUrl=(id,k)=>location.origin+location.pathname+"#t-"+id+"-"+(k+1);
+function setHash(id){const k=S.live&&S.live.id===id?S.live.only:null;try{history.replaceState(null,"",location.pathname+location.search+(id?"#t-"+id+(k!=null?"-"+(k+1):""):""))}catch(e){}}
 const ago=ms=>{const s=Math.round(ms/1000);return s<60?`${s} s ago`:s<3600?`${Math.round(s/60)} min ago`:`${Math.round(s/3600)} h ago`};
 function liveTake(t){
   const L=S.live;
@@ -748,11 +748,11 @@ function liveTake(t){
     NET.liveNote=`${tname(+k)} is now scored on another phone.`;
   }
 }
-async function follow(id){
+async function follow(id,only=null){
   NET.liveMsg="Opening the tournament…";render();
   const r=await ToadsApi.tour("GET","/"+id);
   if(r.status===200&&r.data&&r.data.tournament){
-    S.live={id,mine:{},queue:[],pin:null};liveTake(r.data.tournament);NET.liveMsg="";NET.liveNote="";
+    S.live={id,mine:{},queue:[],pin:null,only};liveTake(r.data.tournament);NET.liveMsg="";NET.liveNote="";
     setHash(id);goHub();window.scrollTo(0,0);return;
   }
   NET.liveMsg=r.offline?"No signal, so the tournament can't be opened. Try again in a moment.":r.status===404?"That tournament doesn't exist (or was deleted).":`Can't open the tournament: ${(r.data&&r.data.error)||r.status}.`;
@@ -867,6 +867,35 @@ async function endLive(){
   render();
 }
 // QR code for the link, drawn by js/vendor/qrcode.js, loaded the first time it is needed
+// A QR code as SVG markup, or "" while the QR library loads (it redraws when ready)
+function qrSvg(url){
+  if(!window.qrcode){drawQrLib();return ""}
+  const q=qrcode(0,"M");q.addData(url);q.make();
+  return q.createSvgTag({cellSize:5,margin:2,scalable:true,alt:"QR code for "+url});
+}
+function drawQrLib(){if(!document.getElementById("qrLib")){const sc=document.createElement("script");sc.id="qrLib";sc.src=document.querySelector('meta[name="toads-qr"]').content;sc.onload=()=>render();document.head.appendChild(sc)}}
+// Organiser: one printable card per table, each with the QR code and link of that table's own screen
+async function openPrint(id){
+  NET.print={id,data:null,msg:"Loading…"};S.stage="print";render();window.scrollTo(0,0);
+  const r=await ToadsApi.tour("GET","/"+id);
+  if(!NET.print||NET.print.id!==id)return;
+  if(r.status===200&&r.data&&r.data.tournament){NET.print.data=r.data.tournament;NET.print.msg=""}
+  else NET.print.msg=failMsg(r,"open it");
+  render();
+}
+function renderPrint(){
+  const P=NET.print||{}, d=P.data;
+  if(!P.id){S.stage="menu";render();return}
+  $("printGo").disabled=!d;
+  if(!d){$("printSheet").innerHTML=`<p class="hint">${esc(P.msg||"")}</p>`;return}
+  const t=d.tour, name=k=>Toads.tableName(t,k), cards=[];
+  for(let k=0;k<t.tables;k++){
+    if(!Toads.tableOn(t,k))continue;
+    const url=tableUrl(P.id,k);
+    cards.push(`<div class="printcard"><h3>${esc(name(k))}</h3><p class="tour">${esc(d.name)}</p><div class="qr">${qrSvg(url)}</div><b>Scan to score this table</b><div class="url">${esc(url.replace(/^https?:\/\//,""))}</div></div>`);
+  }
+  $("printSheet").innerHTML=cards.join("");
+}
 function drawQr(url,boxId="liveQr"){
   const box=$(boxId);
   if(box.dataset.url===url)return;
@@ -891,7 +920,7 @@ function renderLivePanel(){
   $("liveTv").href=tvUrl(L.id);
   const p=NET.pinFor;
   $("pinForm").hidden=!p;
-  if(p)$("pinLabel").textContent=`Enter the scoring PIN to ${p.takeover?"take over":"score"} ${tname(p.k)}.`;
+  if(p)$("pinLabel").textContent=`Enter the scoring PIN to ${p.takeover&&L.only!==p.k?"take over":"score"} ${tname(p.k)}.`;
   $("liveEnd").hidden=!(org&&L.status!=="ended");
   $("liveEdit").hidden=!(org&&L.status!=="ended");
   renderMe();
@@ -934,6 +963,14 @@ function myNext(t,me){
 function liveCard(k,x){
   const L=S.live, mine=myTable(k), other=!mine&&!!L.claims[k], ended=L.status==="ended", g=x&&x.m.game&&!x.m.game.done?x.m.game:null;
   let main="", extra="";
+  // A table's own screen (from its QR code): one button scores it, taking it over from any other phone
+  if(L.only===k){
+    if(mine){
+      if(x)main=`<button class="${g?"":"primary"} big" data-ri="${x.ri}" data-mi="${x.mi}">${g?"Continue":`Start game ${gameNo(x.m)}`}</button>`;
+      extra=`<span>Scored on this phone</span>`;
+    }else if(!ended)main=`<button class="primary big" data-claim="${k}" data-take="1">Score this table</button>`;
+    return {main,extra:extra?`<div class="tclaim">${extra}</div>`:""};
+  }
   if(mine){
     if(x)main=`<button class="${g?"":"primary"}" data-ri="${x.ri}" data-mi="${x.mi}">${g?"Continue":`Start game ${gameNo(x.m)}`}</button>`;
     extra=`<span>Scored on this phone</span><button type="button" class="tbtn giveup" data-release="${k}">✋ Give up table</button>`;
@@ -1016,9 +1053,14 @@ function renderHub(){
   if(t.champion){$("champToad").innerHTML=TOAD;$("champName").textContent=t.champion}
   $("champNew").hidden=!!S.live;$("champChange").textContent=S.live?"Leave":"Change players";
   const list=all();
+  const only=S.live&&S.live.only!=null&&Toads.tableOn(t,S.live.only)?S.live.only:null;
+  $("onlyBar").hidden=only==null;
+  if(only!=null)$("onlyName").textContent=TN(only);
+  $("bracketWrap").hidden=only!=null;
+  $("tablesToggle").hidden=only!=null;
   let cards="";
   for(let k=0;k<t.tables;k++){
-    if(!Toads.tableOn(t,k))continue;
+    if(!Toads.tableOn(t,k)||only!=null&&k!==only)continue;
     const x=list.find(({m})=>m.table===k&&!m.winner);
     const lc=S.live?liveCard(k,x):null;
     if(!x){
@@ -1043,11 +1085,11 @@ function renderHub(){
   if(active-busy.length)parts.push(`${active-busy.length} free`);
   $("tablesSummary").textContent=S.tablesCollapsed?parts.join(" · "):"";
   $("tablesToggle").setAttribute("aria-expanded",!S.tablesCollapsed);
-  $("tablesBody").hidden=!!S.tablesCollapsed;
+  $("tablesBody").hidden=!!S.tablesCollapsed&&only==null;
   // Next to come: matches whose players are known but have no table yet. Collapsed by default.
   const wait=list.filter(({m})=>ready(m)&&m.table==null);
   const playingNow=new Set(busy.flatMap(({m})=>[m.a,m.b]));
-  $("nextBox").hidden=!wait.length;
+  $("nextBox").hidden=!wait.length||only!=null;
   $("nextToggle").setAttribute("aria-expanded",!!S.nextOpen);
   $("nextList").hidden=!S.nextOpen;
   $("nextSummary").textContent=`${wait.length} match${wait.length===1?"":"es"} · table pending`;
@@ -1056,7 +1098,7 @@ function renderHub(){
     return `<li><span class="nm">${esc(m.a)} v ${esc(m.b)}</span><span class="nr">${roundName(ri)}</span><span class="pill idle">${still.length?`Waiting for ${still.map(esc).join(" & ")}`:"Table pending"}</span></li>`;
   }).join("");
   $("bracket").innerHTML=bracketHTML();
-  $("qualiWrap").hidden=!t.quali;
+  $("qualiWrap").hidden=!t.quali||only!=null;
   if(t.quali)$("quali").innerHTML=qualiHTML();
 }
 
@@ -1503,6 +1545,7 @@ if(NET.on){
     const card=e.target.closest("[data-tour]");if(!card)return;
     const id=card.dataset.tour, act=e.target.closest("[data-act]"), yes=e.target.closest("[data-yes]");
     if(e.target.closest("[data-open]")){follow(id);return}
+    if(e.target.closest("[data-qrs]")){openPrint(id);return}
     if(e.target.closest("[data-cancel]")){NET.tourAct=null;render();return}
     const tb=e.target.closest("[data-tbl]");if(tb){tb.disabled=true;tableAction(id,tb.dataset.tbl,+tb.dataset.k);return}
     if(e.target.closest("[data-wdgo]")){
@@ -1615,6 +1658,9 @@ if(NET.on){
   $("liveCopy").addEventListener("click",async()=>{try{await navigator.clipboard.writeText($("liveLink").value);NET.liveNote="Link copied."}catch(e){$("liveLink").select();NET.liveNote="Select the link and copy it."}render()});
   $("liveEnd").addEventListener("click",()=>{$("liveEndConfirm").hidden=false});
   // Organiser: straight to this tournament's Edit (change a player, tables, results)
+  $("onlyAll").addEventListener("click",()=>{if(!S.live)return;S.live.only=null;setHash(S.live.id);render()});
+  $("printBack").addEventListener("click",()=>{NET.print=null;S.stage="tours";render()});
+  $("printGo").addEventListener("click",()=>window.print());
   $("liveEdit").addEventListener("click",()=>{const id=S.live&&S.live.id;if(!id)return;openTours(true);NET.toursFromLive=true;startEdit(id)});
   $("liveEndNo").addEventListener("click",()=>{$("liveEndConfirm").hidden=true});
   $("liveEndYes").addEventListener("click",()=>{$("liveEndConfirm").hidden=true;endLive()});
@@ -1623,7 +1669,7 @@ if(NET.on){
   $("tableCards").addEventListener("click",e=>{
     if(!S.live)return;
     const c=e.target.closest("[data-claim]"),t=e.target.closest("[data-takeover]"),r=e.target.closest("[data-release]");
-    if(c)claimTable(+c.dataset.claim,false);
+    if(c)claimTable(+c.dataset.claim,!!c.dataset.take);
     if(t)claimTable(+t.dataset.takeover,true);
     if(r)releaseTable(+r.dataset.release);
   });
@@ -1708,7 +1754,9 @@ if(NET.on){
     if(sv){if(TV)closeTV();if(!SV||SV.code!==sv[1].toUpperCase())openSV(sv[1].toUpperCase());return}
     if(TV)closeTV();
     if(SV)closeSV();
-    const id=liveHash();if(id&&(!S.live||S.live.id!==id))follow(id);
+    const id=liveHash(), k=hashTable();
+    if(id&&(!S.live||S.live.id!==id))follow(id,k);
+    else if(id&&S.live.only!==k){S.live.only=k;goHub()}
   };
   openHash();window.addEventListener("hashchange",openHash);
   if(S.live&&!liveHash()&&!TV)setHash(S.live.id);

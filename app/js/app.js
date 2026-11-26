@@ -738,11 +738,13 @@ const liveHash=()=>{const h=/^#t-([A-Z0-9]{6})(?:-\d{1,2})?$/i.exec(location.has
 const hashTable=()=>{const h=/^#t-[A-Z0-9]{6}-(\d{1,2})$/i.exec(location.hash);return h?+h[1]-1:null};
 const tableUrl=(id,k)=>location.origin+location.pathname+"#t-"+id+"-"+(k+1);
 // A pub's permanent table code (#vt-<venue id>-<n>): opens table n of the tournament live at that venue now
-const venueTableUrl=(vid,k)=>location.origin+location.pathname+"#vt-"+vid+"-"+(k+1);
+// The pub's name in the link: lower case, spaces (and other signs) as "-", e.g. #vt-dover-castle-1
+const slug=n=>String(n||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"");
+const venueTableUrl=(v,k)=>location.origin+location.pathname+"#vt-"+slug(v.name)+"-"+(k+1);
 async function openVenueTable(vid,k){
   NET.liveMsg="Finding the tournament at this pub…";render();
   const [vr,tr]=await Promise.all([ToadsApi.list("venues"),ToadsApi.tour("GET","")]);
-  const v=(vr.items||NET.venues||[]).find(x=>x.id===vid);
+  const v=(vr.items||NET.venues||[]).find(x=>slug(x.name)===vid||x.id===vid);
   const live=tr.status===200&&tr.data?tr.data.tournaments:null;
   if(!live){NET.liveMsg=tr.offline?"No signal, so the tournament can't be found. Try again in a moment.":"Can't reach the tournaments right now. Try again in a moment.";render();return}
   const here=v?live.filter(t=>t.venue&&nameKey(t.venue)===nameKey(v.name)&&!t.champion).sort((a,b)=>String(b.created).localeCompare(String(a.created))):[];
@@ -907,7 +909,7 @@ function renderPrint(){
     $("printHint").textContent=`Permanent codes for ${P.venue.name}: print them once and leave them on the tables. Each one opens its table in whichever tournament is live at ${P.venue.name} when it's scanned (the tournament needs this venue).`;
     if(document.activeElement!==$("printTables"))$("printTables").value=P.n;
     const cards=[];
-    for(let k=0;k<P.n;k++){const url=venueTableUrl(P.venue.id,k);
+    for(let k=0;k<P.n;k++){const url=venueTableUrl(P.venue,k);
       cards.push(`<div class="printcard"><h3>Table ${k+1}</h3><p class="tour">${esc(P.venue.name)}</p><div class="qr">${qrSvg(url)}</div><b>Scan to score this table</b><div class="url">${esc(url.replace(/^https?:\/\//,""))}</div></div>`)}
     $("printSheet").innerHTML=cards.join("");return;
   }
@@ -1784,7 +1786,7 @@ if(NET.on){
   loadLiveList();
   // A tournament link (#t-<code>) opens that tournament; #tv-<code> turns this page into its TV screen
   const openHash=()=>{
-    const tv=/^#tv-([A-Z0-9]{6})$/i.exec(location.hash), sv=/^#sv-([A-Z0-9]{6})$/i.exec(location.hash), vt=/^#vt-([A-Za-z0-9-]{8,40})-(\d{1,2})$/.exec(location.hash);
+    const tv=/^#tv-([A-Z0-9]{6})$/i.exec(location.hash), sv=/^#sv-([A-Z0-9]{6})$/i.exec(location.hash), vt=/^#vt-([A-Za-z0-9-]{1,80})-(\d{1,2})$/.exec(location.hash);
     if(vt){if(TV)closeTV();if(SV)closeSV();openVenueTable(vt[1],+vt[2]-1);return}
     if(tv){if(SV)closeSV();if(!TV||TV.id!==tv[1].toUpperCase())openTV(tv[1].toUpperCase());return}
     if(sv){if(TV)closeTV();if(!SV||SV.code!==sv[1].toUpperCase())openSV(sv[1].toUpperCase());return}

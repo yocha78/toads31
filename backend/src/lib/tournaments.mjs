@@ -271,6 +271,7 @@ export async function editTournament(db, table, id, input) {
     if (rename && rename.from !== rename.to) {
       const names = drawOrder(item, tour);
       if (!names.includes(rename.from)) return { reply: { status: 404, body: { error: `${rename.from} isn't in this tournament` } } };
+      if ((tour.out || []).includes(rename.from)) return { reply: { status: 409, body: { error: `${rename.from} has been removed from this tournament` } } };
       if (names.some(n => n !== rename.from && nameKey(n) === nameKey(rename.to))) return { reply: { status: 409, body: { error: `${rename.to} is already in this tournament` } } };
       renameIn(tour, rename.from, rename.to);
       item.players = names.map(n => (n === rename.from ? rename.to : n));

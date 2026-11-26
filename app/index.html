@@ -330,6 +330,7 @@
         </div>
       </div>
       <div class="panel" id="tablesPanel">
+        <div class="onlybar" id="onlyBar" hidden><h2 id="onlyName"></h2><button type="button" class="link" id="onlyAll">See the whole tournament</button></div>
         <button type="button" class="collapse" id="tablesToggle" aria-expanded="true" aria-controls="tablesBody">
           <h2>Tables</h2><span class="tsum" id="tablesSummary"></span><span class="chev" aria-hidden="true"></span>
         </button>
@@ -347,7 +348,7 @@
         </div>
       </div>
       <div class="cols-wrap chalk" id="qualiWrap" hidden><div id="quali"></div></div>
-      <div class="cols-wrap chalk"><div id="bracket"></div></div>
+      <div class="cols-wrap chalk" id="bracketWrap"><div id="bracket"></div></div>
     </div>
   </section>
 
@@ -394,6 +395,14 @@
 
   <div id="scorePop" class="scorepop" hidden aria-live="assertive"></div>
 
+  <!-- PRINTABLE TABLE QR CODES (organiser) -->
+  <section id="printView" class="panel" hidden>
+    <div class="viewhead noprint"><h2>Table QR codes</h2><button class="ghost" id="printBack">Back</button></div>
+    <p class="hint noprint" id="printHint">One card per table. Print them (or save as PDF) and put each on its table: scanning it opens that table's screen, where one tap scores the table.</p>
+    <div class="actions noprint"><button class="primary" id="printGo">Print or save as PDF</button></div>
+    <div class="printsheet" id="printSheet"></div>
+  </section>
+
   <!-- WIN -->
   <section id="win" class="panel win" hidden>
     <h2 id="winLabel">Winner</h2>
@@ -409,7 +418,7 @@
     <button class="ghost" id="undoWinBtn">Undo winning throw</button>
   </section>
   <p class="hint" id="syncNote" style="text-align:center" aria-live="polite" hidden></p>
-  <p class="hint" id="verLine" style="text-align:center">Version 26 Nov 2026 · Score pop-up after each throw</p>
+  <p class="hint" id="verLine" style="text-align:center">Version 26 Nov 2026 · Table QR codes</p>
 </div>
 
 <!-- TV SCREEN (#tv-<code>): one tournament for a big screen in the pub -->
@@ -435,10 +444,6 @@
       <div id="tvBracket"></div>
     </div>
   </div>
-  <footer class="tvfoot">
-    <div class="qr" id="tvQr"></div>
-    <div><b>Scan if you want to register the score of a game</b><span>Ask the organiser for the PIN</span><span class="tvlink" id="tvLink"></span></div>
-  </footer>
 </section>
 
 <!-- BIG SCREEN for a practice game (#sv-<code>): the scores, following the phone that scores -->

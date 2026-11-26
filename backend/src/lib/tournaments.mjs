@@ -91,8 +91,8 @@ export async function listTournaments(db, table) {
   const items = await Promise.all((r.Items || []).map(i => load(db, table, i.id)));
   return items.filter(item => item && item.status === "live").slice(0, 20).map(item => {
     const t = JSON.parse(item.state);
-    // first/span: the pub tables it uses, so a pub's table code finds the right one of two tournaments
-    return { id: item.id, name: item.name, venue: item.venue || null, created: item.created, champion: t.champion || null, first: t.first || 1, span: t.tables };
+    // first/span/off: the pub tables it uses (off = taken out), so a pub's table code finds the right one of two tournaments
+    return { id: item.id, name: item.name, venue: item.venue || null, created: item.created, champion: t.champion || null, first: t.first || 1, span: t.tables, off: t.off || [] };
   });
 }
 

@@ -1374,6 +1374,17 @@ function askFinish(s,choices){
 }
 function closeFinish(){$("pad").hidden=false;$("finishAsk").hidden=true}
 
+// After each turn (not the winning one): a big, short-lived card with who scored what and what is left
+let popTimer=null;
+function scorePop(t,left){
+  const el=$("scorePop");
+  el.className="scorepop"+(t.bust?" bust":"");
+  el.innerHTML=`<div class="card"><div class="who">${esc(t.who)}${t.team?`<span> for ${esc(t.team)}</span>`:""}</div>`+
+    (t.bust?`<div class="big">Bust!</div><div class="rest">stays on <b>${t.before}</b></div>`
+      :`<div class="lbl">scored</div><div class="big">${t.s}</div><div class="rest"><b>${left}</b> remaining</div>`)+`</div>`;
+  el.hidden=false;
+  clearTimeout(popTimer);popTimer=setTimeout(()=>{el.hidden=true},2000);
+}
 function score(s,used){
   if(S.live)return scoreLive(s,used);
   const g=G(), t=Toads.playTurn(g,s,used);
@@ -1382,6 +1393,7 @@ function score(s,used){
   closeFinish();
   const {who,team,before}=t, msg=$("msg");
   if(t.won){finishGame(g.gp[t.p]);return}
+  scorePop(t,g.rem[t.p]);
   if(t.bust){msg.textContent=team?`Bust! ${who} goes over, ${team} stays on ${before}.`:`Bust! ${who} stays on ${before}.`;msg.className="msg bad"}
   else{msg.textContent=(s?`${who} scores ${s}`:`${who} scores nothing`)+(team?` for ${team}.`:".");msg.className="msg good"}
   render();
@@ -1396,6 +1408,7 @@ function scoreLive(s,used){
   if(!r.ok){msg.textContent=`That score wasn't taken: ${r.error}.`;msg.className="msg bad";return}
   const {who,before,bust}=r.turn;
   if(r.finished){S.last={name:r.finished.winner};S.stage="win";render();return}
+  scorePop(r.turn,G().rem[r.turn.p]);
   msg.textContent=bust?`Bust! ${who} stays on ${before}.`:s?`${who} scores ${s}.`:`${who} scores nothing.`;
   msg.className="msg "+(bust?"bad":"good");
   render();
@@ -1644,6 +1657,7 @@ function tapGate(){
 $("pad").addEventListener("click",e=>{const b=e.target.closest("button[data-s]");if(b&&tapGate())score(+b.dataset.s)});
 $("finishBtns").addEventListener("click",e=>{const b=e.target.closest("button[data-u]");if(b)score(+$("finishBtns").dataset.s,+b.dataset.u)});
 $("finishCancel").addEventListener("click",closeFinish);
+$("scorePop").addEventListener("click",()=>{clearTimeout(popTimer);$("scorePop").hidden=true});
 $("undoBtn").addEventListener("click",()=>{if(!tapGate())return;closeFinish();undo()});
 $("lenBtn").addEventListener("click",()=>{const m=M();if(Toads.freshFirst(m)){closeFinish();askOrder([m.a,m.b])}});
 $("undoWinBtn").addEventListener("click",undoWin);

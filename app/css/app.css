@@ -500,3 +500,13 @@ body.tvmode{background:#141a18;color:var(--chalk);overflow:hidden}
 .chgp .row input{flex:1;min-width:0}
 .chgp button.danger{border:2px solid var(--bad);color:var(--bad);background:var(--surface);font-weight:700}
 .chgp button.danger.armed{background:var(--bad);color:#fff}
+.scorepop{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55);padding:16px;animation:popin .15s ease-out}
+.scorepop .card{background:var(--slate);color:var(--chalk);border:10px solid var(--wood);border-radius:18px;padding:22px 28px;text-align:center;width:min(100%,360px);box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.scorepop .who{font-family:var(--chalk-display);font-size:2.8rem;color:#fff;line-height:1.1;overflow-wrap:anywhere}
+.scorepop .who span{display:block;font-size:.5em;color:var(--chalk-dim);font-family:var(--chalk-font)}
+.scorepop .lbl{font-family:var(--chalk-font);font-size:1.3rem;color:var(--chalk-dim);margin-top:10px}
+.scorepop .big{font-family:var(--chalk-display);font-size:6.5rem;line-height:1;color:var(--chalk-yellow)}
+.scorepop.bust .big{font-size:4rem;color:var(--chalk-red);margin-top:12px}
+.scorepop .rest{font-family:var(--chalk-font);font-size:1.7rem;margin-top:8px}
+.scorepop .rest b{font-family:var(--chalk-display);font-size:1.6em;color:var(--chalk)}
+@keyframes popin{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}

@@ -27,6 +27,7 @@ Scoring web app for **Toad in the Hole**, the Sussex pub game, at `https://brigh
 - The keypad shows only scores the toads can make: `0 … 2 × toads`. For example, 2 toads shows 0–4.
 - After each score or undo, the keypad and Undo pause for 0.9 s (greyed out), so a double tap can't score twice by mistake (25 Nov 2026).
 - On a live tournament's table cards, **Take over** (brass) and **Give up table** (red) are full outlined buttons, not small links (25 Nov 2026).
+- After each turn that doesn't win, a pop-up shows for 2 s (tap to close): the player's name, the score in big figures and what they have left ("27 remaining"), or "Bust!" and what they stay on (26 Nov 2026).
 - Scores above the points left still appear, styled dashed. Tapping one records a bust.
 
 ### 1.4 Ambiguous finish

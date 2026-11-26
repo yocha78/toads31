@@ -1061,6 +1061,17 @@ function addTeam(){
 function renderOrder(){
   const o=S.ord, left=o.pending.filter(p=>!o.order.includes(p)), m=M();
   $("orderTitle").textContent=m?`Throwing order · ${tname(m.table)} · Game ${gameNo(m)}`:"Throwing order";
+  // Two players (or two duos): no list, just "Who throws first?" and the two names; tap one (tap the other to change)
+  const two=o.pending.length===2;
+  $("orderView").classList.toggle("two",two);
+  if(two){
+    const duo=S.mode==="duo"&&!m;
+    $("orderHint").innerHTML=`<b class="whofirst">Who throws first?</b><br>${duo?"One player from each team throws a toad.":"Each player throws one toad."} The closest to the hole throws first.`;
+    $("pickedList").innerHTML="";$("pickedList").hidden=true;
+    $("pickGrid").innerHTML=o.pending.map(p=>`<button data-p="${esc(p)}" aria-pressed="${o.order[0]===p}">${esc(p)}${o.order[0]===p?'<small>throws first</small>':""}</button>`).join("");
+    $("pickGrid").hidden=false;
+  }else{
+  $("pickedList").hidden=false;
   $("orderHint").textContent=S.mode==="duo"&&!m
     ?"One player from each team throws a toad. Tap the teams from closest to the hole to furthest away."
     :"Each player throws one toad. Tap the players from closest to the hole to furthest away.";
@@ -1069,6 +1080,8 @@ function renderOrder(){
     :`<li class="slot"><span class="num">${i+1}</span>${i===o.order.length?"Select closest player below":"&nbsp;"}</li>`).join("");
   $("pickGrid").innerHTML=left.map(p=>`<button data-p="${esc(p)}">${esc(p)}</button>`).join("");
   $("pickGrid").hidden=!left.length;
+  }
+  $("orderReset").hidden=two;
   $("orderReset").disabled=!o.order.length;
   $("orderGo").disabled=left.length>0;
   $("orderBack").textContent=m?"Back to tables":"Back";
@@ -1725,7 +1738,9 @@ if(NET.on){
 }
 $("shuffleBtn").addEventListener("click",()=>{const a=S.players;for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}render()});
 $("startBtn").addEventListener("click",()=>S.mode==="tournament"?(liveCreating()?createLive():startTournament()):(S.tour=null,askOrder(S.mode==="duo"?S.teams.map(t=>t.name.trim()):S.players.slice())));
-$("pickGrid").addEventListener("click",e=>{const b=e.target.closest("button[data-p]");if(b)pick(b.dataset.p)});
+$("pickGrid").addEventListener("click",e=>{const b=e.target.closest("button[data-p]");if(!b)return;
+  const o=S.ord;if(o.pending.length===2){o.order=[b.dataset.p,o.pending.find(p=>p!==b.dataset.p)];render();return}
+  pick(b.dataset.p)});
 $("orderReset").addEventListener("click",()=>{S.ord.order=[];render()});
 $("toWinBtns").addEventListener("click",e=>{const b=e.target.closest("[data-to]");if(b&&S.ord){S.ord.to=+b.dataset.to;render()}});
 $("orderGo").addEventListener("click",()=>beginGame(S.ord.order.slice()));

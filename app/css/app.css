@@ -253,6 +253,12 @@ ul.players li:last-child{border-bottom:0}
 .picked li.slot{background:transparent;border:1px dashed var(--line);color:var(--muted);font-weight:400}
 .pickgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}
 .pickgrid button{font-weight:700;overflow-wrap:anywhere}
+/* Two players or two duos: "Who throws first?" and two big name buttons */
+#orderView.two .whofirst{display:block;font-size:1.6rem;color:var(--ink);margin:4px 0 2px}
+#orderView.two .pickgrid{grid-template-columns:1fr;gap:12px;margin:10px 0 4px}
+#orderView.two .pickgrid button{font-size:1.4rem;padding:20px 14px;display:flex;flex-direction:column;align-items:center;gap:4px}
+#orderView.two .pickgrid button[aria-pressed="true"]{background:var(--brass);border-color:var(--brass);color:var(--brass-ink)}
+#orderView.two .pickgrid button small{font-size:.8rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em}
 @media (prefers-reduced-motion:no-preference){.bar i{transition:width .3s ease}}
 /* online only: venue, registered players to tap, guest tags */
 .venuebox,.regbox{display:flex;flex-direction:column;gap:8px}

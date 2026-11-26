@@ -116,7 +116,6 @@
         <label class="check orgonly"><input type="checkbox" id="liveOn"> Run it live: everyone follows it on their phones, and each table scores itself</label>
         <div class="livefields" id="liveFields" hidden>
           <input type="text" id="liveName" placeholder="Tournament name" maxlength="40" autocomplete="off" aria-label="Tournament name">
-          <input type="text" id="livePin" inputmode="numeric" pattern="[0-9]*" placeholder="Scoring PIN (4 to 8 digits)" maxlength="8" autocomplete="off" aria-label="Scoring PIN">
           <label class="firstrow">Pub tables it uses <select id="liveFirst"></select></label>
           <span class="hint">Two tournaments at the pub at once? Give each its own tables, e.g. 1 to 3 and 4 to 6, so each table's QR code opens the right one.</span>
           <button type="button" id="liveQrs">Print table QR codes</button>
@@ -302,14 +301,6 @@
           <select id="meSel"></select>
           <p class="menext" id="meNext" aria-live="polite" hidden></p>
         </div>
-        <form class="pinform" id="pinForm" hidden>
-          <label for="pinInput" id="pinLabel"></label>
-          <div class="row">
-            <input type="password" id="pinInput" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off" placeholder="PIN">
-            <button class="primary" type="submit">OK</button>
-            <button class="ghost" type="button" id="pinCancel">Cancel</button>
-          </div>
-        </form>
         <div class="actions">
           <button id="liveShareBtn" aria-controls="shareBox">Share</button>
           <a class="btn" id="liveTv" target="_blank" rel="noopener">TV screen</a>
@@ -323,7 +314,7 @@
         <div class="sharebox" id="shareBox" hidden>
           <div class="qr" id="liveQr"></div>
           <div class="row"><input type="text" id="liveLink" readonly aria-label="Tournament link"><button id="liveCopy">Copy link</button></div>
-          <p class="hint">Anyone with the link can follow the tables and bracket. Scoring a table needs the PIN. For a big screen, open the TV screen on it (or type the link above with #tv- in place of #t-).</p>
+          <p class="hint">Anyone with the link can follow the tables and bracket. Anyone at a table can tap to score it. For a big screen, open the TV screen on it (or type the link above with #tv- in place of #t-).</p>
         </div>
       </div>
       <div class="panel win" id="champPanel" hidden>
@@ -424,7 +415,7 @@
     <button class="ghost" id="undoWinBtn">Undo winning throw</button>
   </section>
   <p class="hint" id="syncNote" style="text-align:center" aria-live="polite" hidden></p>
-  <p class="hint" id="verLine" style="text-align:center">Version 26 Nov 2026 · Two tournaments can share a pub's tables</p>
+  <p class="hint" id="verLine" style="text-align:center">Version 26 Nov 2026 · No scoring PIN: one tap to score a table</p>
 </div>
 
 <!-- TV SCREEN (#tv-<code>): one tournament for a big screen in the pub -->

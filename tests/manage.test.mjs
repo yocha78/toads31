@@ -77,7 +77,7 @@ test("the organiser deletes one game, a player's games, or every game", async ()
   assert.equal((await call(h, "GET /players")).body.players.length, 2, "players stay");
 });
 
-test("edit a tournament: name, venue, PIN, a player's name, and the number of tables", async () => {
+test("edit a tournament: name, venue, a player's name, and the number of tables", async () => {
   const { h } = setup(), org = await orgToken(h);
   const t = (await create(h)).body.tournament;
   const tok0 = (await call(h, "POST /tournaments/{id}/tables/{n}/claim", { id: t.id, n: 0, body: { pin: PIN } })).body.token;
@@ -85,9 +85,7 @@ test("edit a tournament: name, venue, PIN, a player's name, and the number of ta
   const edit = body => call(h, "PATCH /tournaments/{id}", { id: t.id, token: org, body });
   assert.equal((await call(h, "PATCH /tournaments/{id}", { id: t.id, body: { name: "x" } })).status, 401);
   assert.equal((await edit({ name: "" })).status, 400);
-  assert.equal((await edit({ pin: "12" })).status, 400);
-  assert.equal((await edit({ name: "Saturday cup", venue: "The Bell", pin: "9999" })).status, 200);
-  assert.equal((await call(h, "POST /tournaments/{id}/tables/{n}/claim", { id: t.id, n: 0, body: { pin: PIN, takeover: true } })).status, 403, "old PIN");
+  assert.equal((await edit({ name: "Saturday cup", venue: "The Bell", pin: "9999" })).status, 200, "an old phone's PIN is ignored");
   let v = (await call(h, "GET /tournaments/{id}", { id: t.id })).body.tournament;
   assert.deepEqual([v.name, v.venue], ["Saturday cup", "The Bell"]);
   assert.equal((await call(h, "GET /tournaments")).body.tournaments[0].name, "Saturday cup");

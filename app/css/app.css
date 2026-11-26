@@ -525,3 +525,5 @@ body.tvmode{background:#141a18;color:var(--chalk);overflow:hidden}
   #printSheet{position:absolute;left:0;top:0;width:100%;grid-template-columns:1fr 1fr;gap:10mm;margin:0}
   .printcard{border-color:#888}
 }
+.printn{display:flex;align-items:center;gap:10px;margin:8px 0}
+.printn input{width:5em}

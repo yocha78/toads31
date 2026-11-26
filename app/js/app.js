@@ -244,7 +244,7 @@ function renderMenu(){
 // Manage venues (organiser): add, rename, delete
 function renderVenues(){
   $("venueAdmin").innerHTML=NET.venues.slice().sort(byName).map(v=>`<li data-venue="${esc(v.id)}">
-    <input type="text" value="${esc(v.name)}" maxlength="60" aria-label="Venue name"><button class="x" data-vsave>Save</button><button class="x" data-vdel>${NET.armed==="venue:"+v.id?"Tap again to delete":"Delete"}</button></li>`).join("")||`<li class="hint">No venues yet.</li>`;
+    <input type="text" value="${esc(v.name)}" maxlength="60" aria-label="Venue name"><button class="x" data-vsave>Save</button><button class="x" data-vqr>Table QR codes</button><button class="x" data-vdel>${NET.armed==="venue:"+v.id?"Tap again to delete":"Delete"}</button></li>`).join("")||`<li class="hint">No venues yet.</li>`;
 }
 // Open the Menu at the organiser login (from the Tournament tab)
 function openOrgLogin(){NET.orgForm=true;openMenu();$("orgBox").scrollIntoView({block:"start"});$("orgPassword").focus()}
@@ -737,6 +737,21 @@ const scoring=()=>{const m=M();return !S.live||(m&&myTable(m.table))};
 const liveHash=()=>{const h=/^#t-([A-Z0-9]{6})(?:-\d{1,2})?$/i.exec(location.hash);return h?h[1].toUpperCase():null};
 const hashTable=()=>{const h=/^#t-[A-Z0-9]{6}-(\d{1,2})$/i.exec(location.hash);return h?+h[1]-1:null};
 const tableUrl=(id,k)=>location.origin+location.pathname+"#t-"+id+"-"+(k+1);
+// A pub's permanent table code (#vt-<venue id>-<n>): opens table n of the tournament live at that venue now
+const venueTableUrl=(vid,k)=>location.origin+location.pathname+"#vt-"+vid+"-"+(k+1);
+async function openVenueTable(vid,k){
+  NET.liveMsg="Finding the tournament at this pub…";render();
+  const [vr,tr]=await Promise.all([ToadsApi.list("venues"),ToadsApi.tour("GET","")]);
+  const v=(vr.items||NET.venues||[]).find(x=>x.id===vid);
+  const live=tr.status===200&&tr.data?tr.data.tournaments:null;
+  if(!live){NET.liveMsg=tr.offline?"No signal, so the tournament can't be found. Try again in a moment.":"Can't reach the tournaments right now. Try again in a moment.";render();return}
+  const here=v?live.filter(t=>t.venue&&nameKey(t.venue)===nameKey(v.name)&&!t.champion).sort((a,b)=>String(b.created).localeCompare(String(a.created))):[];
+  if(!here.length){const m=v?`Table ${k+1} at ${v.name}: no upcoming match. Scan the code again once the tournament has started.`:"This table code's pub isn't known any more.";
+    if(S.live){NET.liveMsg="";NET.liveNote=m;goHub()}else{NET.liveMsg=m;S.stage="setup";render()}return}
+  NET.liveMsg="";
+  if(S.live&&S.live.id===here[0].id){S.live.only=k;setHash(S.live.id);goHub();return}
+  follow(here[0].id,k);
+}
 function setHash(id){const k=S.live&&S.live.id===id?S.live.only:null;try{history.replaceState(null,"",location.pathname+location.search+(id?"#t-"+id+(k!=null?"-"+(k+1):""):""))}catch(e){}}
 const ago=ms=>{const s=Math.round(ms/1000);return s<60?`${s} s ago`:s<3600?`${Math.round(s/60)} min ago`:`${Math.round(s/3600)} h ago`};
 function liveTake(t){
@@ -883,8 +898,20 @@ async function openPrint(id){
   else NET.print.msg=failMsg(r,"open it");
   render();
 }
+function openVenuePrint(v,n,from){NET.print={venue:{id:v.id,name:v.name},n:n||NET.printN||4,from};S.stage="print";render();window.scrollTo(0,0)}
 function renderPrint(){
   const P=NET.print||{}, d=P.data;
+  $("printTablesRow").hidden=!P.venue;
+  if(P.venue){
+    $("printGo").disabled=false;
+    $("printHint").textContent=`Permanent codes for ${P.venue.name}: print them once and leave them on the tables. Each one opens its table in whichever tournament is live at ${P.venue.name} when it's scanned (the tournament needs this venue).`;
+    if(document.activeElement!==$("printTables"))$("printTables").value=P.n;
+    const cards=[];
+    for(let k=0;k<P.n;k++){const url=venueTableUrl(P.venue.id,k);
+      cards.push(`<div class="printcard"><h3>Table ${k+1}</h3><p class="tour">${esc(P.venue.name)}</p><div class="qr">${qrSvg(url)}</div><b>Scan to score this table</b><div class="url">${esc(url.replace(/^https?:\/\//,""))}</div></div>`)}
+    $("printSheet").innerHTML=cards.join("");return;
+  }
+  $("printHint").textContent="One card per table. Print them (or save as PDF) and put each on its table: scanning it opens that table's screen, where one tap scores the table.";
   if(!P.id){S.stage="menu";render();return}
   $("printGo").disabled=!d;
   if(!d){$("printSheet").innerHTML=`<p class="hint">${esc(P.msg||"")}</p>`;return}
@@ -1065,7 +1092,7 @@ function renderHub(){
     const lc=S.live?liveCard(k,x):null;
     if(!x){
       const more=list.some(({m})=>!m.winner&&!m.bye);
-      cards+=`<div class="tcard free"><div class="tn"><span>${TN(k)}</span><span class="pill idle">Free</span></div><div class="ti">${more?"Waiting for earlier matches to finish.":"No more matches."}</div>${lc&&more?lc.main+lc.extra:lc&&myTable(k)?lc.extra:""}</div>`;
+      cards+=`<div class="tcard free"><div class="tn"><span>${TN(k)}</span><span class="pill idle">Free</span></div><div class="ti">${only!=null?"No upcoming match.":more?"Waiting for earlier matches to finish.":"No more matches."}</div>${lc&&more?lc.main+lc.extra:lc&&myTable(k)?lc.extra:""}</div>`;
       continue;
     }
     const {m,ri,mi}=x, g=m.game&&!m.game.done?m.game:null;
@@ -1621,6 +1648,7 @@ if(NET.on){
   $("venueAdmin").addEventListener("click",async e=>{
     const li=e.target.closest("li[data-venue]");if(!li)return;
     const id=li.dataset.venue, v=NET.venues.find(x=>x.id===id);if(!v)return;
+    if(e.target.closest("[data-vqr]")){openVenuePrint(v);return}
     if(e.target.closest("[data-vsave]")){
       const r=await ToadsApi.tidy("PATCH","venues",id,{name:li.querySelector("input").value});
       if(tidyResult(r,`Saved ${r.item&&r.item.name}.`,"venueMsg")){if(S.venue===v.name)S.venue=r.item.name;await loadDirectory()}
@@ -1659,7 +1687,14 @@ if(NET.on){
   $("liveEnd").addEventListener("click",()=>{$("liveEndConfirm").hidden=false});
   // Organiser: straight to this tournament's Edit (change a player, tables, results)
   $("onlyAll").addEventListener("click",()=>{if(!S.live)return;S.live.only=null;setHash(S.live.id);render()});
-  $("printBack").addEventListener("click",()=>{NET.print=null;S.stage="tours";render()});
+  $("printBack").addEventListener("click",()=>{const P=NET.print||{};NET.print=null;S.stage=P.from||(P.venue?"venues":"tours");render()});
+  // Setting up a live tournament: print the pub's permanent table codes straight away (players not needed yet)
+  $("liveQrs").addEventListener("click",()=>{
+    const v=S.venue&&findIn(NET.venues||[],S.venue);
+    if(!v){NET.liveMsg="Pick the venue first: the table codes belong to the pub.";render();return}
+    NET.liveMsg="";openVenuePrint(v,S.tables,"setup");
+  });
+  $("printTables").addEventListener("input",()=>{const n=Math.round(+$("printTables").value);if(NET.print&&NET.print.venue&&n>=1&&n<=MAX_TABLES){NET.print.n=NET.printN=n;render()}});
   $("printGo").addEventListener("click",()=>window.print());
   $("liveEdit").addEventListener("click",()=>{const id=S.live&&S.live.id;if(!id)return;openTours(true);NET.toursFromLive=true;startEdit(id)});
   $("liveEndNo").addEventListener("click",()=>{$("liveEndConfirm").hidden=true});
@@ -1749,7 +1784,8 @@ if(NET.on){
   loadLiveList();
   // A tournament link (#t-<code>) opens that tournament; #tv-<code> turns this page into its TV screen
   const openHash=()=>{
-    const tv=/^#tv-([A-Z0-9]{6})$/i.exec(location.hash), sv=/^#sv-([A-Z0-9]{6})$/i.exec(location.hash);
+    const tv=/^#tv-([A-Z0-9]{6})$/i.exec(location.hash), sv=/^#sv-([A-Z0-9]{6})$/i.exec(location.hash), vt=/^#vt-([A-Za-z0-9-]{8,40})-(\d{1,2})$/.exec(location.hash);
+    if(vt){if(TV)closeTV();if(SV)closeSV();openVenueTable(vt[1],+vt[2]-1);return}
     if(tv){if(SV)closeSV();if(!TV||TV.id!==tv[1].toUpperCase())openTV(tv[1].toUpperCase());return}
     if(sv){if(TV)closeTV();if(!SV||SV.code!==sv[1].toUpperCase())openSV(sv[1].toUpperCase());return}
     if(TV)closeTV();

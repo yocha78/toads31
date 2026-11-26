@@ -269,7 +269,7 @@ async function loadTours(){
   NET.toursOffline=!!r.offline;
   if(S.stage==="tours")render();
 }
-function openTours(manage){S.manage=!!manage;S.stage="tours";NET.tours=NET.tours||null;NET.tourAct=null;NET.toursMsg="";render();loadTours();window.scrollTo(0,0)}
+function openTours(manage){NET.toursFromLive=false;S.manage=!!manage;S.stage="tours";NET.tours=NET.tours||null;NET.tourAct=null;NET.toursMsg="";render();loadTours();window.scrollTo(0,0)}
 const tvUrl=id=>location.origin+location.pathname+"#tv-"+id;
 const statusText=t=>t.status==="ended"?"Ended":t.champion?`Won by ${t.champion}`:"Live";
 function renderTours(){
@@ -290,10 +290,9 @@ function renderTours(){
         <label>Venue<select name="venue">${venueOptions(d.venue)}</select></label>
         <div class="tedit"><span>Tables</span>${tableRows(d.tour)}
           ${d.tour.tables<maxT?`<button type="button" class="link" data-tbl="add">Add a table</button>`:""}</div>
-        ${leaveRows(d.tour)}
+        ${playerRows(d.tour)}
         ${fixRows(d.tour)}
         <label>New scoring PIN<input type="text" name="pin" inputmode="numeric" pattern="[0-9]*" maxlength="8" placeholder="Leave empty to keep it" autocomplete="off"></label>
-        <label>Correct a player's name<span class="row"><select name="from"><option value="">Player…</option>${names.map(n=>`<option>${esc(n)}</option>`).join("")}</select><input type="text" name="to" maxlength="24" placeholder="New name" autocomplete="off"></span></label>
         <div class="actions"><button type="button" data-cancel>Cancel</button><button class="primary" type="submit">Save</button></div></form>`
         :`<p class="hint">Loading…</p>`;
     }
@@ -343,6 +342,7 @@ async function tourAction(id,kind,el){
   }
 }
 async function startEdit(id){
+  if(!NET.tourAct||NET.tourAct.id!==id)NET.chg=null;
   NET.tourAct={id,kind:"edit",data:null};render();
   const r=await ToadsApi.tour("GET","/"+id);
   if(!NET.tourAct||NET.tourAct.id!==id)return;
@@ -359,7 +359,6 @@ async function saveEdit(form){
   for(let k=0;k<d.tour.tables;k++){const el=form.elements["tname"+k];if(!el)continue;const v=el.value.replace(/\s+/g," ").trim();if(v!==((d.tour.names||{})[k]||""))names[k]=v}
   if(Object.keys(names).length)body.tableNames=names;
   if(f("pin"))body.pin=f("pin");
-  if(f("from")&&f("to"))body.rename={from:f("from"),to:f("to")};
   if(!Object.keys(body).length){NET.tourAct=null;render();return}
   const r=await ToadsApi.tour("PATCH","/"+id,body,"required");
   if(r.status===200){
@@ -665,13 +664,21 @@ function tableRows(tour){
     return `<li${out?` class="out"`:""}><input type="text" name="tname${k}" value="${esc((tour.names||{})[k]||"")}" placeholder="Table ${k+1}" maxlength="20" aria-label="Name of table ${k+1}"${out?" disabled":""}>${act}</li>`;
   }).join("")}</ul>`;
 }
-// Edit form: a player who leaves early (their matches to come become walkovers)
-function leaveRows(t){
-  const out=t.out||[], left=drawNames(t).filter(n=>!out.includes(n)), armed=NET.wdArmed;
-  return `<div class="tedit"><span>A player leaves early</span>
-    <span class="row"><select data-wd><option value="">Player…</option>${left.map(n=>`<option${n===armed?" selected":""}>${esc(n)}</option>`).join("")}</select>
-    <button type="button" class="${armed?"primary":"x"}" data-wdgo>${armed?`Withdraw ${esc(armed)}?`:"Withdraw"}</button></span>
-    <span class="hint">${armed?"Their matches still to play are given to their opponents. This can't be undone.":out.length?`Withdrawn: ${out.map(esc).join(", ")}.`:"Their matches still to play are given to their opponents."}</span></div>`;
+// Edit form: change a player during the tournament: replace them with someone else (they take over the
+// place, results so far and all), or remove them (their matches to come are walkovers, so in the knockout
+// their opponent goes through)
+function playerRows(t){
+  const out=t.out||[], names=drawNames(t), left=names.filter(n=>!out.includes(n)), cp=NET.chg||{}, sel=left.includes(cp.name)?cp.name:"";
+  const reg=(NET.players||[]).map(p=>p.name).filter(n=>!names.some(x=>nameKey(x)===nameKey(n))).sort((a,b)=>a.localeCompare(b));
+  return `<div class="tedit chgp"><span>Change a player</span>
+    <select data-chg><option value="">Player…</option>${left.map(n=>`<option${n===sel?" selected":""}>${esc(n)}</option>`).join("")}</select>
+    ${sel?`<span class="row"><input type="text" data-repl list="replOptions" maxlength="24" placeholder="Replace with…" autocomplete="off" value="${esc(cp.to||"")}"><button type="button" class="primary" data-replgo>Replace</button></span>
+    <datalist id="replOptions">${reg.map(n=>`<option value="${esc(n)}"></option>`).join("")}</datalist>
+    <span class="hint">The new player takes ${esc(sel)}'s place: matches still to play, and results so far.</span>
+    <span class="row"><button type="button" class="danger${cp.armed?" armed":""}" data-wdgo>${cp.armed?`Yes, remove ${esc(sel)}`:`Remove ${esc(sel)} without a replacement`}</button>${cp.armed?`<button type="button" data-wdno>Keep ${esc(sel)}</button>`:""}</span>
+    <span class="hint">${cp.armed?"Their matches still to play are given to their opponents, who go through. This can't be undone.":"Their matches still to play become walkovers: in the knockout their opponent goes through to the next round."}</span>`
+    :`<span class="hint">Pick a player to replace them with someone else, or to remove them.</span>`}
+    ${out.length?`<span class="hint">Removed: ${out.map(esc).join(", ")}.</span>`:""}</div>`;
 }
 // Edit form: set or correct a match result (not once a game has started on the back of it)
 function fixRows(t){
@@ -682,22 +689,29 @@ function fixRows(t){
   return `<div class="tedit"><span>Set or correct a result</span>
     <select data-fixm>${ms.map(({m:x,ri,mi})=>`<option value="${ri}:${mi}"${x===m?" selected":""}>${esc(Toads.roundName(t,ri))}: ${esc(x.a)} v ${esc(x.b)} · ${esc(res(x))}</option>`).join("")}</select>
     <span class="row"><select data-fixw>${[m.a,m.b].map(n=>`<option${n===m.winner?" selected":""}>${esc(n)}</option>`).join("")}</select>
-    <select data-fixs><option value="0"${m.winner&&Math.min(m.wa,m.wb)===0?" selected":""}>won 2–0</option><option value="1"${m.winner&&Math.min(m.wa,m.wb)===1?" selected":""}>won 2–1</option></select>
+    <select data-fixs>${Array.from({length:Toads.matchToWin(t,sel.ri,m)},(_,lo)=>`<option value="${lo}"${m.winner&&Math.min(m.wa,m.wb)===lo?" selected":""}>won ${Toads.matchToWin(t,sel.ri,m)}–${lo}</option>`).join("")}</select>
     <button type="button" class="x" data-fixgo>Save result</button></span></div>`;
 }
 async function leaveAction(id,name){
   const r=await ToadsApi.tour("PATCH","/"+id,{withdraw:name},"required");
-  NET.wdArmed=null;
-  NET.toursMsg=r.status===200?`${name} has withdrawn. Their matches to come are walkovers.`:failMsg(r,"withdraw them");
+  NET.chg=null;
+  NET.toursMsg=r.status===200?`${name} has been removed. Their matches to come are walkovers.`:failMsg(r,"remove them");
+  if(r.status===200&&S.live&&S.live.id===id)liveFetch(true);
+  loadTours();await startEdit(id);
+}
+async function replaceAction(id,from,to){
+  const r=await ToadsApi.tour("PATCH","/"+id,{rename:{from,to}},"required");
+  if(r.status===200)NET.chg=null;
+  NET.toursMsg=r.status===200?`${to} now plays in place of ${from}.`:failMsg(r,"replace them");
   if(r.status===200&&S.live&&S.live.id===id)liveFetch(true);
   loadTours();await startEdit(id);
 }
 async function fixAction(id,form){
   const [ri,mi]=form.querySelector("[data-fixm]").value.split(":").map(Number), w=form.querySelector("[data-fixw]").value, lo=+form.querySelector("[data-fixs]").value;
   const m=Toads.matchOf(NET.tourAct.data.tour,ri,mi);if(!m)return;
-  const body={setResult:{ri,mi,winner:w,wa:w===m.a?2:lo,wb:w===m.b?2:lo}};
+  const to=Toads.matchToWin(NET.tourAct.data.tour,ri,m), body={setResult:{ri,mi,winner:w,wa:w===m.a?to:lo,wb:w===m.b?to:lo}};
   const r=await ToadsApi.tour("PATCH","/"+id,body,"required");
-  NET.toursMsg=r.status===200?`Result saved: ${w} won 2–${lo}.`:failMsg(r,"save the result");
+  NET.toursMsg=r.status===200?`Result saved: ${w} won ${to}–${lo}.`:failMsg(r,"save the result");
   if(r.status===200&&S.live&&S.live.id===id)liveFetch(true);
   loadTours();await startEdit(id);
 }
@@ -879,6 +893,7 @@ function renderLivePanel(){
   $("pinForm").hidden=!p;
   if(p)$("pinLabel").textContent=`Enter the scoring PIN to ${p.takeover?"take over":"score"} ${tname(p.k)}.`;
   $("liveEnd").hidden=!(org&&L.status!=="ended");
+  $("liveEdit").hidden=!(org&&L.status!=="ended");
   renderMe();
   liveStatus();
 }
@@ -1470,7 +1485,7 @@ if(NET.on){
   $("orgOpen").addEventListener("click",()=>{NET.orgForm=true;render();$("orgPassword").focus()});
   $("liveOrgLink").addEventListener("click",openOrgLogin);
   $("playersBack").addEventListener("click",()=>{S.manage=false;S.stage="menu";render()});
-  $("toursBack").addEventListener("click",()=>{S.manage=false;S.stage="menu";render()});
+  $("toursBack").addEventListener("click",()=>{S.manage=false;const live=NET.toursFromLive&&S.live;NET.toursFromLive=false;if(live){S.stage="bracket";liveFetch(true)}else S.stage="menu";render()});
   $("toursList").addEventListener("click",e=>{
     const card=e.target.closest("[data-tour]");if(!card)return;
     const id=card.dataset.tour, act=e.target.closest("[data-act]"), yes=e.target.closest("[data-yes]");
@@ -1478,9 +1493,16 @@ if(NET.on){
     if(e.target.closest("[data-cancel]")){NET.tourAct=null;render();return}
     const tb=e.target.closest("[data-tbl]");if(tb){tb.disabled=true;tableAction(id,tb.dataset.tbl,+tb.dataset.k);return}
     if(e.target.closest("[data-wdgo]")){
-      const name=card.querySelector("[data-wd]").value;if(!name)return;
-      if(NET.wdArmed!==name){NET.wdArmed=name;render();return}
-      e.target.disabled=true;leaveAction(id,name);return;
+      const c=NET.chg;if(!c||!c.name)return;
+      if(!c.armed){c.armed=true;render();return}
+      e.target.disabled=true;leaveAction(id,c.name);return;
+    }
+    if(e.target.closest("[data-wdno]")){if(NET.chg)NET.chg.armed=false;render();return}
+    if(e.target.closest("[data-replgo]")){
+      const c=NET.chg, to=card.querySelector("[data-repl]").value.replace(/\s+/g," ").trim();if(!c||!c.name)return;
+      if(!to){NET.toursMsg="Type the name of the player who replaces them.";render();return}
+      const reg=findIn(NET.players||[],to);
+      e.target.disabled=true;replaceAction(id,c.name,reg?reg.name:to);return;
     }
     if(e.target.closest("[data-fixgo]")){e.target.disabled=true;fixAction(id,e.target.closest("form"));return}
     if(yes){tourAction(id,yes.dataset.yes,yes);return}
@@ -1489,8 +1511,9 @@ if(NET.on){
   // Picking a match to correct shows its two players as the possible winners
   $("toursList").addEventListener("change",e=>{
     if(e.target.matches("[data-fixm]")){NET.fixSel=e.target.value;render()}
-    if(e.target.matches("[data-wd]")&&NET.wdArmed){NET.wdArmed=null;render()}
+    if(e.target.matches("[data-chg]")){NET.chg={name:e.target.value};render()}
   });
+  $("toursList").addEventListener("input",e=>{if(e.target.matches("[data-repl]")&&NET.chg)NET.chg.to=e.target.value});
   $("toursList").addEventListener("submit",e=>{const f=e.target.closest("form[data-edit]");if(f){e.preventDefault();saveEdit(f)}});
   $("wipeBtn").addEventListener("click",()=>{$("wipeConfirm").hidden=false;$("wipeInput").value="";render();$("wipeInput").focus()});
   $("wipeInput").addEventListener("input",()=>{$("wipeYes").disabled=$("wipeInput").value.trim()!=="DELETE"});
@@ -1578,6 +1601,8 @@ if(NET.on){
   $("liveShareBtn").addEventListener("click",()=>{NET.shareOpen=!NET.shareOpen;render()});
   $("liveCopy").addEventListener("click",async()=>{try{await navigator.clipboard.writeText($("liveLink").value);NET.liveNote="Link copied."}catch(e){$("liveLink").select();NET.liveNote="Select the link and copy it."}render()});
   $("liveEnd").addEventListener("click",()=>{$("liveEndConfirm").hidden=false});
+  // Organiser: straight to this tournament's Edit (change a player, tables, results)
+  $("liveEdit").addEventListener("click",()=>{const id=S.live&&S.live.id;if(!id)return;openTours(true);NET.toursFromLive=true;startEdit(id)});
   $("liveEndNo").addEventListener("click",()=>{$("liveEndConfirm").hidden=true});
   $("liveEndYes").addEventListener("click",()=>{$("liveEndConfirm").hidden=true;endLive()});
   $("pinForm").addEventListener("submit",e=>{e.preventDefault();const v=$("pinInput").value.trim(),p=NET.pinFor;if(!v||!p)return;S.live.pin=v;$("pinInput").value="";claimTable(p.k,p.takeover)});

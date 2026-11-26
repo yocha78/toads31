@@ -496,3 +496,7 @@ body.tvmode{background:#141a18;color:var(--chalk);overflow:hidden}
 .svorder .wins{margin-left:auto}
 .svboard:has(.svorder){flex-direction:column;align-items:center}
 .svleft{color:var(--chalk-dim);font-family:var(--chalk-font);font-size:clamp(18px,2vw,34px);text-align:center;margin:.6em 0 0}
+.chgp .row{gap:8px;align-items:stretch}
+.chgp .row input{flex:1;min-width:0}
+.chgp button.danger{border:2px solid var(--bad);color:var(--bad);background:var(--surface);font-weight:700}
+.chgp button.danger.armed{background:var(--bad);color:#fff}

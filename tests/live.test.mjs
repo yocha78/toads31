@@ -128,6 +128,28 @@ async function create(h, body = {}) {
   return call(h, "POST /tournaments", { token, body: { name: "Friday cup", venue: "Dover Castle", players: ["Al", "Bo", "Cy", "Di"], tables: 2, pin: PIN, ...body } });
 }
 
+test("tournaments: two at one pub use their own pub tables (first), shown in the list and table names", async () => {
+  const { h } = setup();
+  for (const bad of [{ first: 0 }, { first: 31 }, { first: "4" }, { first: 2.5 }]) assert.equal((await create(h, bad)).status, 400, JSON.stringify(bad));
+  const a = (await create(h, { name: "Early cup", tables: 2 })).body.tournament;
+  const b = (await create(h, { name: "Late cup", tables: 2, first: 3 })).body.tournament;
+  assert.equal(a.tour.first, undefined);
+  assert.equal(b.tour.first, 3);
+  assert.equal(T.tableName(b.tour, 0), "Table 3");
+  assert.equal(T.tableName(a.tour, 1), "Table 2");
+  const list = (await call(h, "GET /tournaments")).body.tournaments;
+  assert.deepEqual(list.map(x => [x.name, x.first, x.span]).sort(), [["Early cup", 1, 2], ["Late cup", 3, 2]]);
+  // the organiser can move it to other pub tables, and back to table 1
+  const token = await orgToken(h);
+  assert.equal((await call(h, "PATCH /tournaments/{id}", { id: a.id, token, body: { first: 0 } })).status, 400);
+  const moved = await call(h, "PATCH /tournaments/{id}", { id: a.id, token, body: { first: 5 } });
+  assert.equal(moved.status, 200);
+  const tourOf = async id => (await call(h, "GET /tournaments/{id}", { id })).body.tournament.tour;
+  assert.equal((await tourOf(a.id)).first, 5);
+  assert.equal((await call(h, "PATCH /tournaments/{id}", { id: a.id, token, body: { first: 1 } })).status, 200);
+  assert.equal((await tourOf(a.id)).first, undefined);
+});
+
 test("tournaments: only the organiser creates one, and bad details are refused", async () => {
   const { h } = setup();
   assert.equal((await call(h, "POST /tournaments", { body: { name: "x", players: ["a", "b"], tables: 1, pin: PIN } })).status, 401);

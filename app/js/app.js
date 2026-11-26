@@ -112,6 +112,9 @@ function renderLiveSetup(){
     :S.liveOn?"Each table is scored from a phone at the table, after entering the PIN. Share the PIN only with the scorers.":"";
   $("liveHint").hidden=!$("liveHint").textContent;
   $("liveMsg").textContent=NET.liveMsg||"";
+  $("vtPickBox").hidden=!NET.vtPick;
+  $("vtPick").innerHTML=(NET.vtPick||[]).map(p=>`<li><button type="button" data-vtpick="${esc(p.id)}" data-k="${p.k}"><span class="nm">${esc(p.name)}</span><span class="hint">Opens its Table ${p.n}</span></button></li>`).join("");
+  if(document.activeElement!==$("liveFirst"))$("liveFirst").innerHTML=firstOptions(S.liveFirst||1,S.tables);
 }
 // Qualifying: how many matches each player plays, each choice with the matches per table it makes
 const qualiPer=n=>Toads.qualiPers(n).includes(S.qualiPer)?S.qualiPer:2;
@@ -288,6 +291,7 @@ function renderTours(){
       extra=d?`<form class="touredit" data-edit="${id}">
         <label>Name<input type="text" name="name" value="${esc(d.name)}" maxlength="40" autocomplete="off"></label>
         <label>Venue<select name="venue">${venueOptions(d.venue)}</select></label>
+        <label>Pub tables it uses<select name="first">${firstOptions(d.tour.first||1,d.tour.tables)}</select></label>
         <div class="tedit"><span>Tables</span>${tableRows(d.tour)}
           ${d.tour.tables<maxT?`<button type="button" class="link" data-tbl="add">Add a table</button>`:""}</div>
         ${playerRows(d.tour)}
@@ -355,6 +359,7 @@ async function saveEdit(form){
   const f=k=>form.elements[k].value.replace(/\s+/g," ").trim(), body={};
   if(f("name")!==d.name)body.name=f("name");
   if(f("venue")!==(d.venue||""))body.venue=f("venue")||null;
+  if(+f("first")!==(d.tour.first||1))body.first=+f("first");
   const names={};
   for(let k=0;k<d.tour.tables;k++){const el=form.elements["tname"+k];if(!el)continue;const v=el.value.replace(/\s+/g," ").trim();if(v!==((d.tour.names||{})[k]||""))names[k]=v}
   if(Object.keys(names).length)body.tableNames=names;
@@ -658,7 +663,7 @@ function tableRows(tour){
     const act=out?`<button type="button" class="x" data-tbl="restore" data-k="${k}">Put back</button>`
       :busy?`<span class="hint">Match under way</span>`
       :active>1?`<button type="button" class="x" data-tbl="remove" data-k="${k}">Remove</button>`:"";
-    return `<li${out?` class="out"`:""}><input type="text" name="tname${k}" value="${esc((tour.names||{})[k]||"")}" placeholder="Table ${k+1}" maxlength="20" aria-label="Name of table ${k+1}"${out?" disabled":""}>${act}</li>`;
+    return `<li${out?` class="out"`:""}><input type="text" name="tname${k}" value="${esc((tour.names||{})[k]||"")}" placeholder="Table ${Toads.pubTable(tour,k)}" maxlength="20" aria-label="Name of table ${Toads.pubTable(tour,k)}"${out?" disabled":""}>${act}</li>`;
   }).join("")}</ul>`;
 }
 // Edit form: change a player during the tournament: replace them with someone else (they take over the
@@ -718,7 +723,7 @@ async function tableAction(id,kind,k){
   const nm=Toads.tableName(d.tour,k);
   const body=kind==="add"?{tables:d.tour.tables+1}:kind==="remove"?{removeTable:k}:{restoreTable:k};
   const r=await ToadsApi.tour("PATCH","/"+id,body,"required");
-  NET.toursMsg=r.status===200?(kind==="add"?`Added Table ${d.tour.tables+1}.`:kind==="remove"?`Took ${nm} out. Its match waits for the next free table.`:`${nm} is back.`)
+  NET.toursMsg=r.status===200?(kind==="add"?`Added Table ${Toads.pubTable(d.tour,d.tour.tables)}.`:kind==="remove"?`Took ${nm} out. Its match waits for the next free table.`:`${nm} is back.`)
     :failMsg(r,kind==="add"?"add a table":kind==="remove"?"remove it":"put it back");
   if(r.status===200&&S.live&&S.live.id===id)liveFetch(true);
   loadTours();await startEdit(id);
@@ -742,17 +747,29 @@ const tableUrl=(id,k)=>location.origin+location.pathname+"#t-"+id+"-"+(k+1);
 const slug=n=>String(n||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"");
 const venueTableUrl=(v,k)=>location.origin+location.pathname+"#vt-"+slug(v.name)+"-"+(k+1);
 async function openVenueTable(vid,k){
-  NET.liveMsg="Finding the tournament at this pub…";render();
+  NET.liveMsg="Finding the tournament at this pub…";NET.vtPick=null;render();
   const [vr,tr]=await Promise.all([ToadsApi.list("venues"),ToadsApi.tour("GET","")]);
   const v=(vr.items||NET.venues||[]).find(x=>slug(x.name)===vid||x.id===vid);
   const live=tr.status===200&&tr.data?tr.data.tournaments:null;
   if(!live){NET.liveMsg=tr.offline?"No signal, so the tournament can't be found. Try again in a moment.":"Can't reach the tournaments right now. Try again in a moment.";render();return}
-  const here=v?live.filter(t=>t.venue&&nameKey(t.venue)===nameKey(v.name)&&!t.champion).sort((a,b)=>String(b.created).localeCompare(String(a.created))):[];
-  if(!here.length){const m=v?`Table ${k+1} at ${v.name}: no upcoming match. Scan the code again once the tournament has started.`:"This table code's pub isn't known any more.";
-    if(S.live){NET.liveMsg="";NET.liveNote=m;goHub()}else{NET.liveMsg=m;S.stage="setup";render()}return}
-  NET.liveMsg="";
-  if(S.live&&S.live.id===here[0].id){S.live.only=k;setHash(S.live.id);goHub();return}
-  follow(here[0].id,k);
+  // Pub table k+1 belongs to the live tournament whose tables cover it (first .. first+span-1)
+  const n=k+1, first=t=>t.first||1, uses=t=>n>=first(t)&&(t.span==null||n<first(t)+t.span);
+  const here=v?live.filter(t=>t.venue&&nameKey(t.venue)===nameKey(v.name)&&!t.champion&&uses(t)).sort((a,b)=>String(b.created).localeCompare(String(a.created))):[];
+  if(!here.length){const m=v?`Table ${n} at ${v.name}: no upcoming match. Scan the code again once the tournament has started.`:"This table code's pub isn't known any more.";
+    if(S.live){NET.liveMsg="";NET.liveNote=m;S.live.only=null;setHash(S.live.id);goHub()}else{NET.liveMsg=m;S.stage="setup";render()}return}
+  // Two tournaments both using this table: ask which one rather than guess
+  if(here.length>1){NET.liveMsg=`Table ${n} at ${v.name} is in two tournaments. Which one are you playing in?`;NET.vtPick=here.map(t=>({id:t.id,name:t.name,k:n-first(t),n}));S.stage="setup";render();return}
+  NET.liveMsg="";openVtTable(here[0].id,n-first(here[0]));
+}
+function openVtTable(id,k){
+  NET.vtPick=null;NET.liveMsg="";
+  if(S.live&&S.live.id===id){S.live.only=k;setHash(S.live.id);goHub();return}
+  follow(id,k);
+}
+// "Pub tables it uses": the first pub table number, shown as the range it covers
+function firstOptions(sel,span){
+  const o=[];for(let f=1;f<=24;f++)o.push(`<option value="${f}"${f===sel?" selected":""}>${span>1?`Tables ${f} to ${f+span-1}`:`Table ${f}`}</option>`);
+  return o.join("");
 }
 function setHash(id){const k=S.live&&S.live.id===id?S.live.only:null;try{history.replaceState(null,"",location.pathname+location.search+(id?"#t-"+id+(k!=null?"-"+(k+1):""):""))}catch(e){}}
 const ago=ms=>{const s=Math.round(ms/1000);return s<60?`${s} s ago`:s<3600?`${Math.round(s/60)} min ago`:`${Math.round(s/3600)} h ago`};
@@ -786,7 +803,7 @@ async function createLive(){
   const name=$("liveName").value.replace(/\s+/g," ").trim(), pin=$("livePin").value.trim();
   if(!name||!/^\d{4,8}$/.test(pin)){NET.liveMsg=!name?"Give the tournament a name.":"The scoring PIN must be 4 to 8 digits.";render();return}
   NET.liveMsg="Creating the tournament…";render();
-  const r=await ToadsApi.tour("POST","",{name,venue:S.venue||null,players:S.players.slice(),tables:S.tables,format:S.tourFormat,per:qualiPer(S.players.length),pin},"required");
+  const r=await ToadsApi.tour("POST","",{name,venue:S.venue||null,players:S.players.slice(),tables:S.tables,first:S.liveFirst||1,format:S.tourFormat,per:qualiPer(S.players.length),pin},"required");
   if(r.status===201&&r.data){
     S.live={id:r.data.tournament.id,mine:{},queue:[],pin};liveTake(r.data.tournament);
     NET.liveMsg="";NET.liveNote="Share the link or QR code so others can follow. Tap a table to score it.";NET.shareOpen=true;
@@ -920,7 +937,7 @@ function renderPrint(){
   const t=d.tour, name=k=>Toads.tableName(t,k), cards=[];
   for(let k=0;k<t.tables;k++){
     if(!Toads.tableOn(t,k))continue;
-    const url=d.venue?venueTableUrl({name:d.venue},k):tableUrl(P.id,k);
+    const url=d.venue?venueTableUrl({name:d.venue},Toads.pubTable(t,k)-1):tableUrl(P.id,k);
     cards.push(`<div class="printcard"><h3>${esc(name(k))}</h3><p class="tour">${esc(d.name)}</p><div class="qr">${qrSvg(url)}</div><b>Scan to score this table</b><div class="url">${esc(url.replace(/^https?:\/\//,""))}</div></div>`);
   }
   $("printSheet").innerHTML=cards.join("");
@@ -1683,6 +1700,8 @@ if(NET.on){
   });
   $("liveList").addEventListener("click",e=>{const b=e.target.closest("button[data-follow]");if(b)follow(b.dataset.follow)});
   $("liveOn").addEventListener("change",()=>{S.liveOn=$("liveOn").checked;NET.liveMsg="";render()});
+  $("liveFirst").addEventListener("change",()=>{S.liveFirst=+$("liveFirst").value||1;save();render()});
+  $("vtPick").addEventListener("click",e=>{const b=e.target.closest("[data-vtpick]");if(b)openVtTable(b.dataset.vtpick,+b.dataset.k)});
   $("liveLeave").addEventListener("click",leaveLive);
   $("liveShareBtn").addEventListener("click",()=>{NET.shareOpen=!NET.shareOpen;render()});
   $("liveCopy").addEventListener("click",async()=>{try{await navigator.clipboard.writeText($("liveLink").value);NET.liveNote="Link copied."}catch(e){$("liveLink").select();NET.liveNote="Select the link and copy it."}render()});
@@ -1694,7 +1713,7 @@ if(NET.on){
   $("liveQrs").addEventListener("click",()=>{
     const v=S.venue&&findIn(NET.venues||[],S.venue);
     if(!v){NET.liveMsg="Pick the venue first: the table codes belong to the pub.";render();return}
-    NET.liveMsg="";openVenuePrint(v,S.tables,"setup");
+    NET.liveMsg="";openVenuePrint(v,(S.liveFirst||1)+S.tables-1,"setup");
   });
   $("printTables").addEventListener("input",()=>{const n=Math.round(+$("printTables").value);if(NET.print&&NET.print.venue&&n>=1&&n<=MAX_TABLES){NET.print.n=NET.printN=n;render()}});
   $("printGo").addEventListener("click",()=>window.print());

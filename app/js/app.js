@@ -109,7 +109,7 @@ function renderLiveSetup(){
   $("liveFields").hidden=!S.liveOn;
   $("liveOrgLink").hidden=!T||org;
   $("liveHint").textContent=!T?"":!org?"The organiser can run a tournament live, so everyone follows it and each table scores from its own phone."
-    :S.liveOn?"Each table is scored from a phone at the table, after entering the PIN. Share the PIN only with the scorers.":"";
+    :S.liveOn?"Each table is scored from a phone at the table: anyone there taps Score this table, no PIN needed.":"";
   $("liveHint").hidden=!$("liveHint").textContent;
   $("liveMsg").textContent=NET.liveMsg||"";
   $("vtPickBox").hidden=!NET.vtPick;
@@ -296,7 +296,6 @@ function renderTours(){
           ${d.tour.tables<maxT?`<button type="button" class="link" data-tbl="add">Add a table</button>`:""}</div>
         ${playerRows(d.tour)}
         ${fixRows(d.tour)}
-        <label>New scoring PIN<input type="text" name="pin" inputmode="numeric" pattern="[0-9]*" maxlength="8" placeholder="Leave empty to keep it" autocomplete="off"></label>
         <div class="actions"><button type="button" data-cancel>Cancel</button><button class="primary" type="submit">Save</button></div></form>`
         :`<p class="hint">Loading…</p>`;
     }
@@ -363,11 +362,10 @@ async function saveEdit(form){
   const names={};
   for(let k=0;k<d.tour.tables;k++){const el=form.elements["tname"+k];if(!el)continue;const v=el.value.replace(/\s+/g," ").trim();if(v!==((d.tour.names||{})[k]||""))names[k]=v}
   if(Object.keys(names).length)body.tableNames=names;
-  if(f("pin"))body.pin=f("pin");
   if(!Object.keys(body).length){NET.tourAct=null;render();return}
   const r=await ToadsApi.tour("PATCH","/"+id,body,"required");
   if(r.status===200){
-    if(S.live&&S.live.id===id){if(body.pin)S.live.pin=body.pin;liveFetch(true)}
+    if(S.live&&S.live.id===id)liveFetch(true);
     tourDone(`Saved ${body.name||d.name}.`,true);
   }else{NET.toursMsg=failMsg(r,"save it");render()}
 }
@@ -731,9 +729,9 @@ async function tableAction(id,kind,k){
 
 /* ---------- live tournaments (online only) ---------- */
 // The organiser creates one; anyone follows it with its link (#t-<code>) and the phone that claims a table
-// with the PIN scores it. Changes are applied here straight away with the same rules as the server
+// scores it (one tap, no PIN). Changes are applied here straight away with the same rules as the server
 // (Toads.applyOp), queued, and sent in order, so scoring carries on with no signal.
-// S.live = {id, name, venue, status, ver, tour, claims, mine:{table:{token,tag}}, pin, queue:[{n, op}], seen}
+// S.live = {id, name, venue, status, ver, tour, claims, mine:{table:{token,tag}}, queue:[{n, op}], seen}
 const LIVE_POLL=4000;
 const liveOn=()=>!!(NET.on&&S.live&&S.live.tour);
 const myTable=k=>!!(S.live&&S.live.mine[k]);
@@ -786,28 +784,28 @@ async function follow(id,only=null){
   NET.liveMsg="Opening the tournament…";render();
   const r=await ToadsApi.tour("GET","/"+id);
   if(r.status===200&&r.data&&r.data.tournament){
-    S.live={id,mine:{},queue:[],pin:null,only};liveTake(r.data.tournament);NET.liveMsg="";NET.liveNote="";
+    S.live={id,mine:{},queue:[],only};liveTake(r.data.tournament);NET.liveMsg="";NET.liveNote="";
     setHash(id);goHub();window.scrollTo(0,0);return;
   }
   NET.liveMsg=r.offline?"No signal, so the tournament can't be opened. Try again in a moment.":r.status===404?"That tournament doesn't exist (or was deleted).":`Can't open the tournament: ${(r.data&&r.data.error)||r.status}.`;
   if(liveHash()===id)setHash(null);
   render();
 }
-function leaveLive(){S.live=null;NET.liveNote="";NET.pinFor=null;setHash(null);S.focus=null;S.ord=null;S.last=null;S.stage="setup";render()}
+function leaveLive(){S.live=null;NET.liveNote="";setHash(null);S.focus=null;S.ord=null;S.last=null;S.stage="setup";render()}
 async function loadLiveList(){
   const r=await ToadsApi.tour("GET","");
   NET.liveList=r.status===200&&r.data?r.data.tournaments:null;
   if(S.stage==="setup")render();
 }
 async function createLive(){
-  const name=$("liveName").value.replace(/\s+/g," ").trim(), pin=$("livePin").value.trim();
-  if(!name||!/^\d{4,8}$/.test(pin)){NET.liveMsg=!name?"Give the tournament a name.":"The scoring PIN must be 4 to 8 digits.";render();return}
+  const name=$("liveName").value.replace(/\s+/g," ").trim();
+  if(!name){NET.liveMsg="Give the tournament a name.";render();return}
   NET.liveMsg="Creating the tournament…";render();
-  const r=await ToadsApi.tour("POST","",{name,venue:S.venue||null,players:S.players.slice(),tables:S.tables,first:S.liveFirst||1,format:S.tourFormat,per:qualiPer(S.players.length),pin},"required");
+  const r=await ToadsApi.tour("POST","",{name,venue:S.venue||null,players:S.players.slice(),tables:S.tables,first:S.liveFirst||1,format:S.tourFormat,per:qualiPer(S.players.length)},"required");
   if(r.status===201&&r.data){
-    S.live={id:r.data.tournament.id,mine:{},queue:[],pin};liveTake(r.data.tournament);
+    S.live={id:r.data.tournament.id,mine:{},queue:[]};liveTake(r.data.tournament);
     NET.liveMsg="";NET.liveNote="Share the link or QR code so others can follow. Tap a table to score it.";NET.shareOpen=true;
-    S.liveOn=false;$("liveName").value="";$("livePin").value="";
+    S.liveOn=false;$("liveName").value="";
     setHash(S.live.id);goHub();window.scrollTo(0,0);return;
   }
   NET.liveMsg=r.offline?"No signal, so the live tournament can't be created. Untick “Run it live” to play it on this phone only.":r.expired?"Your organiser login has run out. Log in again in the Menu.":`Can't create it: ${(r.data&&r.data.error)||r.status}.`;
@@ -872,16 +870,14 @@ function liveStatus(){
 }
 async function claimTable(k,takeover){
   const L=S.live;
-  if(!L.pin){NET.pinFor={k,takeover};render();$("pinInput").focus();return}
   NET.liveNote=`Claiming ${tname(k)}…`;render();
-  const r=await ToadsApi.tour("POST",`/${L.id}/tables/${k}/claim`,{pin:L.pin,takeover:!!takeover});
+  const r=await ToadsApi.tour("POST",`/${L.id}/tables/${k}/claim`,{takeover:!!takeover});
   if(S.live!==L)return;
   if(r.status===200&&r.data){
-    L.mine[k]={token:r.data.token,tag:r.data.tag};NET.pinFor=null;
+    L.mine[k]={token:r.data.token,tag:r.data.tag};
     NET.liveNote=`This phone now scores ${tname(k)}.`;await liveFetch(true);render();return;
   }
-  if(r.status===403){L.pin=null;NET.pinFor={k,takeover};NET.liveNote="Wrong PIN.";}
-  else if(r.status===409&&r.data&&r.data.claimed){NET.liveNote=`Another phone is already scoring ${tname(k)}. Tap “Take over” if it has stopped.`;await liveFetch(true)}
+  if(r.status===409&&r.data&&r.data.claimed){NET.liveNote=`Another phone is already scoring ${tname(k)}. Tap “Take over” if it has stopped.`;await liveFetch(true)}
   else NET.liveNote=r.offline?"No signal. Try again in a moment.":`Can't claim the table: ${(r.data&&r.data.error)||r.status}.`;
   render();
 }
@@ -964,9 +960,6 @@ function renderLivePanel(){
   $("liveShareBtn").setAttribute("aria-expanded",!!NET.shareOpen);
   if(NET.shareOpen){$("liveLink").value=url;drawQr(url)}
   $("liveTv").href=tvUrl(L.id);
-  const p=NET.pinFor;
-  $("pinForm").hidden=!p;
-  if(p)$("pinLabel").textContent=`Enter the scoring PIN to ${p.takeover&&L.only!==p.k?"take over":"score"} ${tname(p.k)}.`;
   $("liveEnd").hidden=!(org&&L.status!=="ended");
   $("liveEdit").hidden=!(org&&L.status!=="ended");
   renderMe();
@@ -1720,8 +1713,6 @@ if(NET.on){
   $("liveEdit").addEventListener("click",()=>{const id=S.live&&S.live.id;if(!id)return;openTours(true);NET.toursFromLive=true;startEdit(id)});
   $("liveEndNo").addEventListener("click",()=>{$("liveEndConfirm").hidden=true});
   $("liveEndYes").addEventListener("click",()=>{$("liveEndConfirm").hidden=true;endLive()});
-  $("pinForm").addEventListener("submit",e=>{e.preventDefault();const v=$("pinInput").value.trim(),p=NET.pinFor;if(!v||!p)return;S.live.pin=v;$("pinInput").value="";claimTable(p.k,p.takeover)});
-  $("pinCancel").addEventListener("click",()=>{NET.pinFor=null;NET.liveNote="";render()});
   $("tableCards").addEventListener("click",e=>{
     if(!S.live)return;
     const c=e.target.closest("[data-claim]"),t=e.target.closest("[data-takeover]"),r=e.target.closest("[data-release]");

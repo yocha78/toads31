@@ -289,9 +289,7 @@ table.st td.n,table.st th.n{text-align:right}
 .check{display:flex;gap:10px;align-items:flex-start;line-height:1.35}
 .check input{width:20px;height:20px;margin:1px 0 0;flex:none;accent-color:var(--brass)}
 .livefields{display:flex;flex-direction:column;gap:8px}
-.livefields input,.pinform input{font:inherit;padding:12px 14px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);min-width:0}
-.pinform{display:flex;flex-direction:column;gap:6px}
-.pinform input{flex:1}
+.livefields input{font:inherit;padding:12px 14px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);min-width:0}
 .livepanel{display:flex;flex-direction:column;gap:6px}
 .livepanel h2{overflow-wrap:anywhere}
 .livepanel .hint{margin:0}

@@ -207,7 +207,10 @@ function assignTables(tour){
 }
 // Tables keep their number for good: one the organiser removed stays out (tour.off), and a table can have a name
 const tableOn=(tour,k)=>k>=0&&k<tour.tables&&!(tour.off||[]).includes(k);
-const tableName=(tour,k)=>(tour.names&&tour.names[k])||`Table ${k+1}`;
+// The pub's own number for a tournament table: a tournament can use pub tables `first` onwards (default 1),
+// so two tournaments at one pub can share its numbered tables (e.g. 1-3 and 4-6)
+const pubTable=(tour,k)=>(tour.first||1)+k;
+const tableName=(tour,k)=>(tour.names&&tour.names[k])||`Table ${pubTable(tour,k)}`;
 function roundName(tour,ri){
   if(ri<0)return "Qualifying";
   const fromEnd=tour.rounds.length-1-ri;
@@ -317,6 +320,6 @@ function gameRecord(g,info){
 }
 
 const Toads={TARGET,TO_WIN,toWin,defaultToWin,matchToWin,freshFirst,decider,coinsFor,keypad,finishChoices,newG,throwerOf,playTurn,undoTurn,sideStats,playerStats,
-  mk,knockSize,seedOrder,qualiPers,buildTour,standings,qualiDone,settle,withdraw,setResult,allMatches,ready,assignTables,roundName,tableOn,tableName,gameNo,recordGameWin,undoGameWin,matchOf,applyOp,gameRecord};
+  mk,knockSize,seedOrder,qualiPers,buildTour,standings,qualiDone,settle,withdraw,setResult,allMatches,ready,assignTables,roundName,tableOn,tableName,pubTable,gameNo,recordGameWin,undoGameWin,matchOf,applyOp,gameRecord};
 if(typeof module!=="undefined"&&module.exports)module.exports=Toads;else root.Toads=Toads;
 })(this);

@@ -117,12 +117,15 @@
         <div class="livefields" id="liveFields" hidden>
           <input type="text" id="liveName" placeholder="Tournament name" maxlength="40" autocomplete="off" aria-label="Tournament name">
           <input type="text" id="livePin" inputmode="numeric" pattern="[0-9]*" placeholder="Scoring PIN (4 to 8 digits)" maxlength="8" autocomplete="off" aria-label="Scoring PIN">
+          <label class="firstrow">Pub tables it uses <select id="liveFirst"></select></label>
+          <span class="hint">Two tournaments at the pub at once? Give each its own tables, e.g. 1 to 3 and 4 to 6, so each table's QR code opens the right one.</span>
           <button type="button" id="liveQrs">Print table QR codes</button>
         </div>
       </div>
       <p class="hint" id="liveHint"></p>
       <button type="button" class="link" id="liveOrgLink" hidden>Log in as organiser</button>
       <p class="msg" id="liveMsg" aria-live="polite"></p>
+      <div class="livenow" id="vtPickBox" hidden><ul id="vtPick"></ul></div>
     </div>
     <h2>Players</h2>
     <form id="addForm" class="row">
@@ -421,7 +424,7 @@
     <button class="ghost" id="undoWinBtn">Undo winning throw</button>
   </section>
   <p class="hint" id="syncNote" style="text-align:center" aria-live="polite" hidden></p>
-  <p class="hint" id="verLine" style="text-align:center">Version 26 Nov 2026 · Table codes open the right table every time</p>
+  <p class="hint" id="verLine" style="text-align:center">Version 26 Nov 2026 · Two tournaments can share a pub's tables</p>
 </div>
 
 <!-- TV SCREEN (#tv-<code>): one tournament for a big screen in the pub -->

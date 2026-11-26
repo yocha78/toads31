@@ -24,10 +24,11 @@
   function check(){
     fetch("version.json?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.json():null}).then(function(v){
       if(!v||!v.build||v.build===b)return;
-      // Twice at most per build: the second time with an address that is new for sure
-      var n=0;
-      try{var was=(sessionStorage.getItem("toads31.reloaded")||"").split("|");n=was[0]===v.build?+was[1]||1:0;if(n>=2)return;sessionStorage.setItem("toads31.reloaded",v.build+"|"+(n+1))}catch(e){return}
-      location.replace(location.pathname+"?v="+encodeURIComponent(v.build)+(n?"&r="+Date.now():"")+location.hash);
+      // An address without ?v=<build> (a scanned table code, a typed link) always moves to it, however often;
+      // one already on ?v=<build> that is still old tries once more with &r=, then stops, so it can never loop
+      var q=location.search, onV=q.indexOf("v="+encodeURIComponent(v.build))>=0;
+      if(onV&&/[?&]r=/.test(q))return;
+      location.replace(location.pathname+"?v="+encodeURIComponent(v.build)+(onV?"&r="+Date.now():"")+location.hash);
     }).catch(function(){});
   }
   check();
@@ -420,7 +421,7 @@
     <button class="ghost" id="undoWinBtn">Undo winning throw</button>
   </section>
   <p class="hint" id="syncNote" style="text-align:center" aria-live="polite" hidden></p>
-  <p class="hint" id="verLine" style="text-align:center">Version 26 Nov 2026 · Same pub table codes from tournaments and venues</p>
+  <p class="hint" id="verLine" style="text-align:center">Version 26 Nov 2026 · Table codes open the right table every time</p>
 </div>
 
 <!-- TV SCREEN (#tv-<code>): one tournament for a big screen in the pub -->

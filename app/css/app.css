@@ -508,5 +508,5 @@ body.tvmode{background:#141a18;color:var(--chalk);overflow:hidden}
 .scorepop .big{font-family:var(--chalk-display);font-size:6.5rem;line-height:1;color:var(--chalk-yellow)}
 .scorepop.bust .big{font-size:4rem;color:var(--chalk-red);margin-top:12px}
 .scorepop .rest{font-family:var(--chalk-font);font-size:1.7rem;margin-top:8px}
-.scorepop .rest b{font-family:var(--chalk-display);font-size:1.6em;color:var(--chalk)}
+.scorepop .rest b{font-family:var(--chalk-display);font-size:2.4em;color:#fff;vertical-align:-.12em}
 @keyframes popin{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}

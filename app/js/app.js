@@ -913,14 +913,14 @@ function renderPrint(){
       cards.push(`<div class="printcard"><h3>Table ${k+1}</h3><p class="tour">${esc(P.venue.name)}</p><div class="qr">${qrSvg(url)}</div><b>Scan to score this table</b><div class="url">${esc(url.replace(/^https?:\/\//,""))}</div></div>`)}
     $("printSheet").innerHTML=cards.join("");return;
   }
-  $("printHint").textContent="One card per table. Print them (or save as PDF) and put each on its table: scanning it opens that table's screen, where one tap scores the table.";
+  $("printHint").textContent=d&&d.venue?`One card per table, the same codes as Manage venues gives for ${d.venue}: print them once and leave them on the tables. Scanning one opens that table in whichever tournament is live there.`:"One card per table. Print them (or save as PDF) and put each on its table: scanning it opens that table's screen, where one tap scores the table.";
   if(!P.id){S.stage="menu";render();return}
   $("printGo").disabled=!d;
   if(!d){$("printSheet").innerHTML=`<p class="hint">${esc(P.msg||"")}</p>`;return}
   const t=d.tour, name=k=>Toads.tableName(t,k), cards=[];
   for(let k=0;k<t.tables;k++){
     if(!Toads.tableOn(t,k))continue;
-    const url=tableUrl(P.id,k);
+    const url=d.venue?venueTableUrl({name:d.venue},k):tableUrl(P.id,k);
     cards.push(`<div class="printcard"><h3>${esc(name(k))}</h3><p class="tour">${esc(d.name)}</p><div class="qr">${qrSvg(url)}</div><b>Scan to score this table</b><div class="url">${esc(url.replace(/^https?:\/\//,""))}</div></div>`);
   }
   $("printSheet").innerHTML=cards.join("");

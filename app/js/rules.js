@@ -180,12 +180,12 @@ function setResult(tour,r){
   if(!m.a||!m.b)return {error:"this match's players aren't known yet"};
   if(r.winner!==m.a&&r.winner!==m.b)return {error:"the winner must be one of the match's players"};
   const lo=r.winner===m.a?r.wb:r.wa, hi=r.winner===m.a?r.wa:r.wb;
-  const to=toWin(m);
+  const to=matchToWin(tour,r.ri,m);
   if(hi!==to||!Number.isInteger(lo)||lo<0||lo>=to)return {error:`the winner has ${to} games and the loser fewer`};
   if(m.game&&!m.game.done)return {error:"a game is being played on this match: finish it first",conflict:true};
   const after=allMatches(tour).filter(x=>x.m!==m&&x.m.game&&feedsFrom(tour,x,r.ri,r.mi,{winner:true}));
   if(after.length)return {error:"a game has already started on the back of this result",conflict:true};
-  m.winner=r.winner;m.wa=r.wa;m.wb=r.wb;m.wo=false;m.fixed=true;
+  m.winner=r.winner;m.wa=r.wa;m.wb=r.wb;m.to=to;m.wo=false;m.fixed=true;
   settle(tour);freeTables(tour);assignTables(tour);
   return {ok:true};
 }
@@ -207,7 +207,10 @@ function assignTables(tour){
 }
 // Tables keep their number for good: one the organiser removed stays out (tour.off), and a table can have a name
 const tableOn=(tour,k)=>k>=0&&k<tour.tables&&!(tour.off||[]).includes(k);
-const tableName=(tour,k)=>(tour.names&&tour.names[k])||`Table ${k+1}`;
+// The pub's own number for a tournament table: a tournament can use pub tables `first` onwards (default 1),
+// so two tournaments at one pub can share its numbered tables (e.g. 1-3 and 4-6)
+const pubTable=(tour,k)=>(tour.first||1)+k;
+const tableName=(tour,k)=>(tour.names&&tour.names[k])||`Table ${pubTable(tour,k)}`;
 function roundName(tour,ri){
   if(ri<0)return "Qualifying";
   const fromEnd=tour.rounds.length-1-ri;
@@ -222,6 +225,8 @@ function defaultToWin(tour,ri){
   const fromEnd=tour.rounds.length-1-ri;
   return fromEnd===0?4:fromEnd===1?3:TO_WIN;
 }
+// A match's length: its own once chosen, else the default for its round
+const matchToWin=(tour,ri,m)=>Number.isInteger(m.to)?m.to:defaultToWin(tour,ri);
 // Game 1 is on but nobody has scored yet: it can still be started again with another order or length
 const freshFirst=m=>!!(m&&m.game&&!m.game.done&&!m.game.hist.length&&m.wa+m.wb===0);
 // The deciding game: both players one game short of winning the match
@@ -314,7 +319,7 @@ function gameRecord(g,info){
     turns:g.hist.map(h=>({p:h.p,who:h.who||g.gp[h.p],s:h.s,c:h.c,bust:!!h.bust,before:h.before,round:h.round,at:h.at||null}))};
 }
 
-const Toads={TARGET,TO_WIN,toWin,defaultToWin,freshFirst,decider,coinsFor,keypad,finishChoices,newG,throwerOf,playTurn,undoTurn,sideStats,playerStats,
-  mk,knockSize,seedOrder,qualiPers,buildTour,standings,qualiDone,settle,withdraw,setResult,allMatches,ready,assignTables,roundName,tableOn,tableName,gameNo,recordGameWin,undoGameWin,matchOf,applyOp,gameRecord};
+const Toads={TARGET,TO_WIN,toWin,defaultToWin,matchToWin,freshFirst,decider,coinsFor,keypad,finishChoices,newG,throwerOf,playTurn,undoTurn,sideStats,playerStats,
+  mk,knockSize,seedOrder,qualiPers,buildTour,standings,qualiDone,settle,withdraw,setResult,allMatches,ready,assignTables,roundName,tableOn,tableName,pubTable,gameNo,recordGameWin,undoGameWin,matchOf,applyOp,gameRecord};
 if(typeof module!=="undefined"&&module.exports)module.exports=Toads;else root.Toads=Toads;
 })(this);

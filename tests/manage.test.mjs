@@ -77,7 +77,7 @@ test("the organiser deletes one game, a player's games, or every game", async ()
   assert.equal((await call(h, "GET /players")).body.players.length, 2, "players stay");
 });
 
-test("edit a tournament: name, venue, PIN, a player's name, and the number of tables", async () => {
+test("edit a tournament: name, venue, a player's name, and the number of tables", async () => {
   const { h } = setup(), org = await orgToken(h);
   const t = (await create(h)).body.tournament;
   const tok0 = (await call(h, "POST /tournaments/{id}/tables/{n}/claim", { id: t.id, n: 0, body: { pin: PIN } })).body.token;
@@ -85,9 +85,7 @@ test("edit a tournament: name, venue, PIN, a player's name, and the number of ta
   const edit = body => call(h, "PATCH /tournaments/{id}", { id: t.id, token: org, body });
   assert.equal((await call(h, "PATCH /tournaments/{id}", { id: t.id, body: { name: "x" } })).status, 401);
   assert.equal((await edit({ name: "" })).status, 400);
-  assert.equal((await edit({ pin: "12" })).status, 400);
-  assert.equal((await edit({ name: "Saturday cup", venue: "The Bell", pin: "9999" })).status, 200);
-  assert.equal((await call(h, "POST /tournaments/{id}/tables/{n}/claim", { id: t.id, n: 0, body: { pin: PIN, takeover: true } })).status, 403, "old PIN");
+  assert.equal((await edit({ name: "Saturday cup", venue: "The Bell", pin: "9999" })).status, 200, "an old phone's PIN is ignored");
   let v = (await call(h, "GET /tournaments/{id}", { id: t.id })).body.tournament;
   assert.deepEqual([v.name, v.venue], ["Saturday cup", "The Bell"]);
   assert.equal((await call(h, "GET /tournaments")).body.tournaments[0].name, "Saturday cup");
@@ -212,9 +210,25 @@ test("a player withdraws and a result is corrected, by the organiser only", asyn
   let v = await tour();
   assert.deepEqual(v.out, ["Bo"]);
   assert.equal(T.matchOf(v, 0, 0).winner, "Al");
-  assert.equal((await edit({ setResult: { ri: 0, mi: 1, winner: "Cy", wa: 2, wb: 1 } })).status, 200);
+  assert.equal((await edit({ setResult: { ri: 0, mi: 1, winner: "Cy", wa: 2, wb: 1 } })).status, 400, "a semi-final is best of 5");
+  assert.equal((await edit({ setResult: { ri: 0, mi: 1, winner: "Cy", wa: 3, wb: 1 } })).status, 200);
   v = await tour();
   assert.deepEqual([v.rounds[1][0].a, v.rounds[1][0].b], ["Al", "Cy"]);
   assert.equal((await edit({ setResult: { ri: 0, mi: 1, winner: "Cy", wa: 5, wb: 1 } })).status, 400);
   assert.equal((await edit({ setResult: { ri: 4, mi: 0, winner: "Cy", wa: 2, wb: 0 } })).status, 400);
+});
+
+test("a player is replaced mid-tournament: the new player takes their place; a removed player can't be replaced", async () => {
+  const { h } = setup(), org = await orgToken(h);
+  const t = (await create(h, { players: ["Al", "Bo", "Cy", "Di"] })).body.tournament;
+  const edit = body => call(h, "PATCH /tournaments/{id}", { id: t.id, token: org, body });
+  const tour = async () => (await call(h, "GET /tournaments/{id}", { id: t.id })).body.tournament.tour;
+  assert.equal((await edit({ setResult: { ri: 0, mi: 0, winner: "Al", wa: 3, wb: 0 } })).status, 200);
+  assert.equal((await edit({ rename: { from: "Al", to: "Ed" } })).status, 200);
+  let v = await tour();
+  assert.deepEqual([T.matchOf(v, 0, 0).a, T.matchOf(v, 0, 0).winner, v.rounds[1][0].a], ["Ed", "Ed", "Ed"], "Ed carries on in Al's place");
+  assert.equal((await edit({ withdraw: "Di" })).status, 200);
+  v = await tour();
+  assert.deepEqual([T.matchOf(v, 0, 1).winner, T.matchOf(v, 0, 1).wo, v.rounds[1][0].b], ["Cy", true, "Cy"], "Di's opponent goes through");
+  assert.equal((await edit({ rename: { from: "Di", to: "Fi" } })).status, 409);
 });

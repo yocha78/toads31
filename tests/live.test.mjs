@@ -125,13 +125,38 @@ test("applyOp: undoing a match win before the next match starts gives the table 
 
 async function create(h, body = {}) {
   const token = await orgToken(h);
-  return call(h, "POST /tournaments", { token, body: { name: "Friday cup", venue: "Dover Castle", players: ["Al", "Bo", "Cy", "Di"], tables: 2, pin: PIN, ...body } });
+  return call(h, "POST /tournaments", { token, body: { name: "Friday cup", venue: "Dover Castle", players: ["Al", "Bo", "Cy", "Di"], tables: 2, ...body } });
 }
+
+test("tournaments: two at one pub use their own pub tables (first), shown in the list and table names", async () => {
+  const { h } = setup();
+  for (const bad of [{ first: 0 }, { first: 31 }, { first: "4" }, { first: 2.5 }]) assert.equal((await create(h, bad)).status, 400, JSON.stringify(bad));
+  const a = (await create(h, { name: "Early cup", tables: 2 })).body.tournament;
+  const b = (await create(h, { name: "Late cup", tables: 2, first: 3 })).body.tournament;
+  assert.equal(a.tour.first, undefined);
+  assert.equal(b.tour.first, 3);
+  assert.equal(T.tableName(b.tour, 0), "Table 3");
+  assert.equal(T.tableName(a.tour, 1), "Table 2");
+  const list = (await call(h, "GET /tournaments")).body.tournaments;
+  assert.deepEqual(list.map(x => [x.name, x.first, x.span]).sort(), [["Early cup", 1, 2], ["Late cup", 3, 2]]);
+  // a table taken out is listed, so its pub code no longer opens this tournament
+  assert.equal((await call(h, "PATCH /tournaments/{id}", { id: a.id, token: await orgToken(h), body: { removeTable: 0 } })).status, 200);
+  assert.deepEqual((await call(h, "GET /tournaments")).body.tournaments.find(x => x.id === a.id).off, [0]);
+  // the organiser can move it to other pub tables, and back to table 1
+  const token = await orgToken(h);
+  assert.equal((await call(h, "PATCH /tournaments/{id}", { id: a.id, token, body: { first: 0 } })).status, 400);
+  const moved = await call(h, "PATCH /tournaments/{id}", { id: a.id, token, body: { first: 5 } });
+  assert.equal(moved.status, 200);
+  const tourOf = async id => (await call(h, "GET /tournaments/{id}", { id })).body.tournament.tour;
+  assert.equal((await tourOf(a.id)).first, 5);
+  assert.equal((await call(h, "PATCH /tournaments/{id}", { id: a.id, token, body: { first: 1 } })).status, 200);
+  assert.equal((await tourOf(a.id)).first, undefined);
+});
 
 test("tournaments: only the organiser creates one, and bad details are refused", async () => {
   const { h } = setup();
   assert.equal((await call(h, "POST /tournaments", { body: { name: "x", players: ["a", "b"], tables: 1, pin: PIN } })).status, 401);
-  for (const bad of [{ name: "" }, { players: ["Al"] }, { players: ["Al", "al"] }, { tables: 0 }, { tables: 9 }, { pin: "12" }, { pin: 1234 }, { players: ["<b>"] }])
+  for (const bad of [{ name: "" }, { players: ["Al"] }, { players: ["Al", "al"] }, { tables: 0 }, { tables: 9 }, { players: ["<b>"] }])
     assert.equal((await create(h, bad)).status, 400, JSON.stringify(bad));
   const r = await create(h);
   assert.equal(r.status, 201);
@@ -149,11 +174,10 @@ test("tournaments: only the organiser creates one, and bad details are refused",
   assert.deepEqual((await call(h, "GET /tournaments")).body.tournaments.map(x => [x.name, x.champion]), [["Friday cup", null]]);
 });
 
-test("tournaments: a table is claimed with the PIN, and only that phone scores it", async () => {
+test("tournaments: anyone claims a table without a PIN, and only that phone scores it", async () => {
   const { h } = setup();
   const t = (await create(h)).body.tournament;
-  assert.equal((await call(h, "POST /tournaments/{id}/tables/{n}/claim", { id: t.id, n: 0, body: { pin: "0000" } })).status, 403);
-  const a = await call(h, "POST /tournaments/{id}/tables/{n}/claim", { id: t.id, n: 0, body: { pin: PIN } });
+  const a = await call(h, "POST /tournaments/{id}/tables/{n}/claim", { id: t.id, n: 0, body: {} });
   assert.equal(a.status, 200);
   assert.equal((await call(h, "POST /tournaments/{id}/tables/{n}/claim", { id: t.id, n: 5, body: { pin: PIN } })).status, 404);
   const b = await call(h, "POST /tournaments/{id}/tables/{n}/claim", { id: t.id, n: 0, body: { pin: PIN } });

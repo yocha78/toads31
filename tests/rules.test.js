@@ -275,9 +275,9 @@ test("a knockout walkover moves the other player on",()=>{
 });
 
 test("the organiser sets or corrects a result until a game is played on the back of it",()=>{
-  const t=T.buildTour(names(4),2,"knockout");T.settle(t);T.assignTables(t);
+  const t=T.buildTour(names(8),2,"knockout");T.settle(t);T.assignTables(t);
   const m=t.rounds[0][0];
-  assert.match(T.setResult(t,{ri:0,mi:0,winner:"P1",wa:3,wb:0}).error,/games/);
+  assert.match(T.setResult(t,{ri:0,mi:0,winner:"P1",wa:3,wb:0}).error,/games/,"quarter-finals are best of 3");
   assert.match(T.setResult(t,{ri:0,mi:0,winner:"P9",wa:2,wb:0}).error,/winner/);
   assert.ok(T.setResult(t,{ri:0,mi:0,winner:"P1",wa:2,wb:1}).ok);
   assert.equal(t.rounds[1][0].a,"P1");
@@ -286,5 +286,6 @@ test("the organiser sets or corrects a result until a game is played on the back
   winMatch(t,t.rounds[0][1],"P3");T.assignTables(t);
   t.rounds[1][0].game={done:false};
   assert.match(T.setResult(t,{ri:0,mi:0,winner:"P1",wa:2,wb:0}).error,/back of this result/);
-  assert.match(T.setResult(t,{ri:1,mi:0,winner:"P2",wa:2,wb:0}).error,/being played/);
+  assert.match(T.setResult(t,{ri:1,mi:0,winner:"P2",wa:2,wb:0}).error,/3 games/,"semi-finals are best of 5");
+  assert.match(T.setResult(t,{ri:1,mi:0,winner:"P2",wa:3,wb:0}).error,/being played/);
 });

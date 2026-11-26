@@ -139,6 +139,9 @@ test("tournaments: two at one pub use their own pub tables (first), shown in the
   assert.equal(T.tableName(a.tour, 1), "Table 2");
   const list = (await call(h, "GET /tournaments")).body.tournaments;
   assert.deepEqual(list.map(x => [x.name, x.first, x.span]).sort(), [["Early cup", 1, 2], ["Late cup", 3, 2]]);
+  // a table taken out is listed, so its pub code no longer opens this tournament
+  assert.equal((await call(h, "PATCH /tournaments/{id}", { id: a.id, token: await orgToken(h), body: { removeTable: 0 } })).status, 200);
+  assert.deepEqual((await call(h, "GET /tournaments")).body.tournaments.find(x => x.id === a.id).off, [0]);
   // the organiser can move it to other pub tables, and back to table 1
   const token = await orgToken(h);
   assert.equal((await call(h, "PATCH /tournaments/{id}", { id: a.id, token, body: { first: 0 } })).status, 400);

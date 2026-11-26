@@ -750,8 +750,8 @@ async function openVenueTable(vid,k){
   const v=(vr.items||NET.venues||[]).find(x=>slug(x.name)===vid||x.id===vid);
   const live=tr.status===200&&tr.data?tr.data.tournaments:null;
   if(!live){NET.liveMsg=tr.offline?"No signal, so the tournament can't be found. Try again in a moment.":"Can't reach the tournaments right now. Try again in a moment.";render();return}
-  // Pub table k+1 belongs to the live tournament whose tables cover it (first .. first+span-1)
-  const n=k+1, first=t=>t.first||1, uses=t=>n>=first(t)&&(t.span==null||n<first(t)+t.span);
+  // Pub table k+1 belongs to the live tournament whose tables cover it (first .. first+span-1), unless taken out
+  const n=k+1, first=t=>t.first||1, uses=t=>n>=first(t)&&(t.span==null||n<first(t)+t.span)&&!(t.off||[]).includes(n-first(t));
   const here=v?live.filter(t=>t.venue&&nameKey(t.venue)===nameKey(v.name)&&!t.champion&&uses(t)).sort((a,b)=>String(b.created).localeCompare(String(a.created))):[];
   if(!here.length){const m=v?`Table ${n} at ${v.name}: no upcoming match. Scan the code again once the tournament has started.`:"This table code's pub isn't known any more.";
     if(S.live){NET.liveMsg="";NET.liveNote=m;S.live.only=null;setHash(S.live.id);goHub()}else{NET.liveMsg=m;S.stage="setup";render()}return}
